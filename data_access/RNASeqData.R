@@ -13,7 +13,7 @@ download.location <- "../temp/"
 
 salmon.result.id <- "syn17077846" 
 qc.id <- "syn17090810"
-salmon.result <- synTableQuery("SELECT * FROM syn13363852 where dataSubtype = 'processed'")$asDataFrame()
+salmon.result <- synTableQuery("SELECT * FROM syn13363852 where fileFormat = 'sf'")$asDataFrame()
 
 ### Remove 2-025_Neurofibroma due to high dup%
 syn.query <- salmon.result[salmon.result$specimenID != "2-025 Neurofibroma",]
