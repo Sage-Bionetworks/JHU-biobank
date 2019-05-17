@@ -5,25 +5,25 @@ syn <- synapse$Synapse()
 syn$login()
 
 require(tidyverse)
-syn_file='syn18137070'
-expData<-read.csv(gzfile(syn$get(syn_file)$path))%>%subset(study%in%c('JHU NTAP Biobank'))
+syn_file='syn18349249'
+expData<-read.csv(gzfile(syn$get(syn_file)$path))%>%subset(study%in%c('JHU NTAP Biobank', 'Preclinical NF1-MPNST Platform Development'))
 
 require(singleCellSeq)
-#analysis_dir='syn11398941'
 
 #call the heatmap rmd
 rmd<-system.file('heatmap_vis.Rmd',package='singleCellSeq')
 
-this.code='https://raw.githubusercontent.com/sgosline/NEXUS/master/analysis/2019-02-19/panNF_immune_sigs.R'
+this.code='https://raw.githubusercontent.com/Sage-Bionetworks/MPNSTAnalysis/master/analysis/NF_immune_sigs.R?token=ABwyOm38MhyuxTpTydIbnJDO1FnF12F1ks5cdXDFwA%3D%3D'
 #rownames(expData)<-expData$id
 
 #create matrix
 combined.mat=reshape2::acast(expData,Symbol~id,value.var="zScore")
 missing=which(apply(combined.mat,1,function(x) any(is.na(x))))
-combined.mat=combined.mat[-missing,]
+if(length(missing)>0)
+  combined.mat=combined.mat[-missing,]
 
 #create phenData
-phenData<-expData%>%select(id,age,Sex,tumorType,isCellLine,study)%>%unique()
+phenData<-expData%>%select(id,Sex,tumorType,isCellLine,study)%>%unique()
 wd=getwd()
 
 rownames(phenData)<-phenData$id
