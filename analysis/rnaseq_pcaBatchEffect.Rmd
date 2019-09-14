@@ -1,0 +1,201 @@
+---
+title: "RNAseq PCA Batch Effects"
+author: "Xengie Doan"
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    code_folding: hide
+    highlight: haddock
+    latex_engine: xelatex
+    theme: cerulean
+    toc: yes
+    toc_depth: 4
+    toc_float: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy.opts=list(width.cutoff=50), tidy=TRUE, fig.width=12, fig.height=8,fig.path = "analysis/figs/", dev=c('png', 'pdf'))
+
+pkgs = c("DESeq2", "tidyverse", "RColorBrewer", "pheatmap", "ggplot2", "plotly", "biomaRt", "org.Hs.eg.db", "AnnotationDbi", "clusterProfiler", "reshape2" ) #, "profvis") for profiling
+lapply(pkgs, library, character.only = TRUE)
+```
+
+## All cNF & MPNST samples
+### PCA by tumor type and individual 
+```{r}
+load("data/vsd.Rda")
+p <- plotPCA(vsd, intgroup=c("individualID", "tumorType", "transplantationType", "sex"), returnData= TRUE)
+percentVar <- round(100 * attr(p, "percentVar"))
+ggplot(p, aes(PC1, PC2, color = individualID, shape= tumorType, label = apply(cbind(vsd$individualID, coalesce(vsd$transplantationType,ifelse(vsd$isCellLine == "true", "cellLine", NA))), 1, function(x) paste(x[!is.na(x)], collapse = ".")) )) + geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed() + ggrepel::geom_text_repel()
+```
+
+
+### Remove batch effects
+use limma removeBatchEffect and visualize in a PCA plot
+
+#### removing consortium
+```{r}
+mat <- assay(vsd)
+#consortium is a big batch effect
+mat <- limma::removeBatchEffect(mat, vsd$consortium)
+
+assay(vsd) <- mat
+
+p <- plotPCA(vsd, intgroup=c("individualID", "tumorType", "transplantationType", "isCellLine"), returnData= TRUE)
+percentVar <- round(100 * attr(p, "percentVar"))
+ggplot(p, aes(PC1, PC2, color = individualID, shape= tumorType,label = apply(cbind(vsd$individualID, coalesce(vsd$transplantationType,ifelse(vsd$isCellLine == "true", "cellLine", NA))), 1, function(x) paste(x[!is.na(x)], collapse = ".")) )) + geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed() + ggrepel::geom_text_repel()
+```
+
+#### removing consortium and is cell line
+```{r}
+mat <- assay(vsd)
+#consortium is a big batch effect
+mat <- limma::removeBatchEffect(mat, vsd$consortium, vsd$isCellLine)
+assay(vsd) <- mat
+
+p <- plotPCA(vsd, intgroup=c("individualID", "tumorType", "transplantationType", "isCellLine"), returnData= TRUE)
+percentVar <- round(100 * attr(p, "percentVar"))
+ggplot(p, aes(PC1, PC2, color = individualID, shape= tumorType, label = apply(cbind(vsd$individualID, coalesce(vsd$transplantationType,ifelse(vsd$isCellLine == "true", "cellLine", NA))), 1, function(x) paste(x[!is.na(x)], collapse = ".")) )) + geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed() + ggrepel::geom_text_repel()
+```
+
+#### removing consortium and xeno
+```{r}
+
+mat <- assay(vsd)
+vsd$transplantationType[is.na(vsd$transplantationType)] <- "notXenograft"
+
+#consortium is a big batch effect
+mat <- limma::removeBatchEffect(mat, vsd$consortium, vsd$transplantationType)
+
+assay(vsd) <- mat
+
+vsd$transplantationType[which(vsd$transplantationType == "notXenograft")] <- NA
+
+p <- plotPCA(vsd, intgroup=c("individualID", "tumorType", "transplantationType", "isCellLine"), returnData= TRUE)
+percentVar <- round(100 * attr(p, "percentVar"))
+
+ggplot(p, aes(PC1, PC2, color = individualID, shape= tumorType, label = apply(cbind(vsd$individualID, coalesce(vsd$transplantationType,ifelse(vsd$isCellLine == "true", "cellLine", NA))), 1, function(x) paste(x[!is.na(x)], collapse = ".")) )) + geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed() + ggrepel::geom_text_repel()
+```
+
+
+
+####removing cell line and xenograft
+```{r}
+mat <- assay(vsd)
+vsd$transplantationType[is.na(vsd$transplantationType)] <- "no"
+
+#consortium is a big batch effect
+mat <- limma::removeBatchEffect(mat, vsd$transplantationType, vsd$isCellLine)
+assay(vsd) <- mat
+
+p <- plotPCA(vsd, intgroup=c("individualID", "tumorType", "transplantationType", "isCellLine"), returnData= TRUE)
+percentVar <- round(100 * attr(p, "percentVar"))
+ggplot(p, aes(PC1, PC2, color = individualID, shape= tumorType, label = apply(cbind(vsd$individualID, coalesce(vsd$transplantationType,ifelse(vsd$isCellLine == "true", "cellLine", NA))), 1, function(x) paste(x[!is.na(x)], collapse = ".")) )) + geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed() + ggrepel::geom_text_repel()
+```
+
+## Filtered cNF & MPNST 
+remove 2-009 Xenograft and 2-009 Cell Line because they are contaminated with mouse and filtered for protein coding genes only. 
+
+### PCA by sample and tumor type
+```{r}
+load("data/vsd_remove2009contaminants_protCodingOnly.Rda")
+p <- plotPCA(vsd, intgroup=c("individualID", "tumorType", "transplantationType", "sex"), returnData= TRUE)
+percentVar <- round(100 * attr(p, "percentVar"))
+ggplot(p, aes(PC1, PC2, color = individualID, shape= tumorType, label = apply(cbind(vsd$individualID, coalesce(vsd$transplantationType,ifelse(vsd$isCellLine == "true", "cellLine", NA))), 1, function(x) paste(x[!is.na(x)], collapse = ".")) )) + geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed() + ggrepel::geom_text_repel()
+```
+
+### PCA trying to remove batch effects
+#### removing consortium
+```{r}
+load("data/vsd_remove2009contaminants_protCodingOnly.Rda")
+mat <- assay(vsd)
+#consortium is a big batch effect
+mat <- limma::removeBatchEffect(mat, vsd$consortium)
+
+assay(vsd) <- mat
+
+p <- plotPCA(vsd, intgroup=c("individualID", "tumorType", "transplantationType", "isCellLine"), returnData= TRUE)
+percentVar <- round(100 * attr(p, "percentVar"))
+ggplot(p, aes(PC1, PC2, color = individualID, shape= tumorType, label = apply(cbind(vsd$individualID, coalesce(vsd$transplantationType,ifelse(vsd$isCellLine == "true", "cellLine", NA))), 1, function(x) paste(x[!is.na(x)], collapse = ".")) )) + geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed() + ggrepel::geom_text_repel()
+```
+
+#### removing consortium and is cell line
+```{r}
+load("data/vsd_remove2009contaminants_protCodingOnly.Rda")
+mat <- assay(vsd)
+#consortium is a big batch effect
+mat <- limma::removeBatchEffect(mat, vsd$consortium, vsd$isCellLine)
+assay(vsd) <- mat
+
+p <- plotPCA(vsd, intgroup=c("individualID", "tumorType", "transplantationType", "isCellLine"), returnData= TRUE)
+percentVar <- round(100 * attr(p, "percentVar"))
+ggplot(p, aes(PC1, PC2, color = individualID, shape= tumorType, label = apply(cbind(vsd$individualID, coalesce(vsd$transplantationType,ifelse(vsd$isCellLine == "true", "cellLine", NA))), 1, function(x) paste(x[!is.na(x)], collapse = ".")) )) + geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed() + ggrepel::geom_text_repel()
+```
+
+####removing cell line and xenograft
+```{r}
+load("data/vsd_remove2009contaminants_protCodingOnly.Rda")
+vsd$xenoCellLine <- paste(vsd$transplantationType, vsd$isCellLine, sep = ".")
+
+mat <- assay(vsd)
+vsd$transplantationType[is.na(vsd$transplantationType)] <- "no"
+
+#consortium is a big batch effect
+mat <- limma::removeBatchEffect(mat, vsd$transplantationType, vsd$isCellLine)
+assay(vsd) <- mat
+
+p <- plotPCA(vsd, intgroup=c("individualID", "tumorType", "transplantationType", "isCellLine", "xenoCellLine"), returnData= TRUE)
+percentVar <- round(100 * attr(p, "percentVar"))
+
+#rename xeno no back to NA
+vsd$transplantationType <- gsub("^no", NA, vsd$transplantationType)
+
+ggplot(p, aes(PC1, PC2, color = individualID, shape= tumorType, label = apply(cbind(vsd$individualID, coalesce(vsd$transplantationType,ifelse(vsd$isCellLine == "true", "cellLine", NA))), 1, function(x) paste(x[!is.na(x)], collapse = ".")) )) + geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed() + ggrepel::geom_text_repel()
+# ggplotly()
+```
+
+#### removing consortium, xenograft, and is cell line
+```{r}
+load("data/vsd_remove2009contaminants_protCodingOnly.Rda")
+mat <- assay(vsd)
+
+vsd$xenoCellLine <- paste(vsd$transplantationType, vsd$isCellLine, sep = ".")
+
+#consortium is a big batch effect
+mat <- limma::removeBatchEffect(mat, vsd$consortium, vsd$xenoCellLine)
+assay(vsd) <- mat
+
+p <- plotPCA(vsd, intgroup=c("individualID", "tumorType", "transplantationType", "isCellLine", "xenoCellLine"), returnData= TRUE)
+percentVar <- round(100 * attr(p, "percentVar"))
+ggplot(p, aes(PC1, PC2, color = individualID, shape= tumorType, label = apply(cbind(vsd$individualID, coalesce(vsd$transplantationType,ifelse(vsd$isCellLine == "true", "cellLine", NA))), 1, function(x) paste(x[!is.na(x)], collapse = ".")) )) + geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed() + ggrepel::geom_text_repel()
+```

@@ -1,0 +1,470 @@
+---
+title: "RNAseq_Analysis"
+author: "Xengie Doan"
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    code_folding: hide
+    highlight: haddock
+    latex_engine: xelatex
+    theme: cerulean
+    toc: yes
+    toc_depth: 4
+    toc_float: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy.opts=list(width.cutoff=50), tidy=TRUE, fig.width=12, fig.height=8,fig.path = "/Users/xdoan/Shell/R/MPNSTAnalysis/analysis/JHU_only/figs/", dev=c('png', 'pdf'))
+
+pkgs = c("DESeq2", "tidyverse", "RColorBrewer", "pheatmap", "ggplot2", "plotly", "biomaRt", "org.Hs.eg.db", "AnnotationDbi", "clusterProfiler", "reshape2", "knitr" ) #, "profvis") for profiling
+lapply(pkgs, library, character.only = TRUE)
+```
+
+## Objective:
+RNAseq of pNF vs MPNST samples form JHU Biobank
+
+### load files
+```{r}
+# source("~/Shell/MPNSTAnalysis/data_access/RNASeqData.R")
+
+load("../data/salmon.result.metadata.Rda")
+syn.query <- salmon.result[salmon.result$specimenID != "2-025 Neurofibroma",]
+metadata.df <- syn.query[,colSums(is.na(syn.query))<nrow(syn.query)]
+cols.keep <- c("specimenID","id","individualID","sex","tumorType","isCellLine","isPrimaryCell","tissue","experimentalCondition","study","study", "transplantationType")
+metadata.df <- metadata.df[,cols.keep]
+
+metadata.df <- metadata.df %>% filter(study == "JHU NTAP Biobank")
+rownames(metadata.df) <- metadata.df$specimenID
+
+```
+
+###filter for protein coding genes
+From the transcript counts step to make sure no unprocessed transcripts, etc are included in the counts. Also only includes genes with gene symbols. 
+```{r}
+### from sara's script https://github.com/sgosline/NEXUS/blob/master/analysis/2019-03-13/rnaSeqDiffEx.R
+# library(synapser)
+# synLogin()
+# expData <- synGet('syn18421359')
+# expData <- read.csv(expData$path)
+# expData <- expData %>% subset(Symbol != "" & study == "JHU NTAP Biobank")
+# expData <- expData%>%mutate(roundedCounts=round(totalCounts))
+# save(expData, file = "JHU_only/data/prot_coding_counts_expData.Rda")
+load("data/prot_coding_counts_expData.Rda")
+
+data.mat=reshape2::acast(expData,Symbol~specimenID,value.var="roundedCounts")
+missing=which(apply(data.mat,1,function(x) any(is.na(x))))
+if(length(missing)>0)
+  data.mat=data.mat[-missing,]
+
+### manually change name of 2-004 specID
+colnames(data.mat)[8] <- "2-004 Plexiform Neurofibroma"
+
+### reorder data.mat
+data.mat <- data.mat[, rownames(metadata.df)]
+```
+
+###filter for pNF and MPNST samples from JHU
+Removed 2-009-Cell-Line and 2-009-Xenograft because of alleged mouse contamination
+```{r}
+# detach("package:synapser", unload=TRUE)
+# unloadNamespace("PythonEmbedInR")
+
+### just pNF MPNST
+### also remove 2-009-Cell-Line and 2-009-Xenograft bc mouse contamination
+metadata.df_filtered <- metadata.df %>%
+  filter(tumorType=="Plexiform Neurofibroma" | tumorType =="Malignant Peripheral Nerve Sheath Tumor") %>%
+  filter(specimenID != "2-009 Cell Line" & specimenID != "2-009 Xenograft")
+
+###shorten words and remove spaces for downstream
+metadata.df_filtered$tumorType <- gsub("Plexiform Neurofibroma", "-pNF", metadata.df_filtered$tumorType)
+metadata.df_filtered$tumorType <- gsub("Malignant Peripheral Nerve Sheath Tumor", "-MPNST", metadata.df_filtered$tumorType)
+
+filtered_ids <- metadata.df_filtered$specimenID
+
+data.mat <- data.mat[, filtered_ids]
+# txi[[1]] <- txi[[1]][,filtered_ids]
+# txi[[2]] <- txi[[2]][,filtered_ids]
+# txi[[3]] <- txi[[3]][,filtered_ids]
+
+## change metadata specimen IDs
+metadata.df_filtered$specimenID <- gsub(" Plexiform Neurofibroma", "-pNF", metadata.df_filtered$specimenID)
+metadata.df_filtered$specimenID <- gsub(" Malignant Peripheral Nerve Sheath Tumor", "-MPNST", metadata.df_filtered$specimenID)
+metadata.df_filtered$specimenID <- gsub(" ", "-", metadata.df_filtered$specimenID)
+
+### change colname in txi to match
+# colnames(txi[[1]]) <- metadata.df_filtered$specimenID
+# colnames(txi[[2]]) <- metadata.df_filtered$specimenID
+# colnames(txi[[3]]) <- metadata.df_filtered$specimenID
+colnames(data.mat) <- metadata.df_filtered$specimenID
+
+rownames(metadata.df_filtered) <- metadata.df_filtered$specimenID
+```
+
+### dendrogram of samples 
+```{r}
+# install.packages("factoextra")
+library(factoextra)
+
+# as.dist(1-cmat/corr ) 
+# plot(hclust(dist(datasets::mtcars)))
+
+transposed_data <- t(head(data.mat))
+```
+
+Manhattan distance:
+```{r hclustManhattan}
+data_dist <- dist(transposed_data, method= "manhattan" )
+hc = hclust(data_dist)
+plot(hc)
+```
+
+Canberra distance:
+```{r hclustCanberra}
+data_dist <- dist(transposed_data, method= "canberra" )
+hc = hclust(data_dist)
+plot(hc)
+```
+
+binary distance:
+```{r hclustBinary}
+data_dist <- dist(transposed_data, method= "binary" )
+hc = hclust(data_dist)
+plot(hc)
+```
+
+correlation:
+```{r}
+cmat <- cor(data.mat, use = "pairwise.complete.obs" )
+
+hc <- hclust( as.dist(1-cmat))
+
+plot(hc)
+```
+
+### run DESEQ
+filter out counts < 10 and add study as a covariate to help with batch effects. set alpha to .05
+
+```{r, message = FALSE, warning = FALSE}
+# detach("package:synapser", unload=TRUE)
+unloadNamespace("PythonEmbedInR")
+dds <- DESeqDataSetFromMatrix(countData = data.mat,
+  colData = metadata.df_filtered,
+  design= ~ tumorType)
+
+###filter out reads with low counts
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep,]
+
+dds <- DESeq(dds)
+
+res <- results(dds, alpha = .05)
+
+resultsNames(dds)
+
+resLFC <- lfcShrink(dds, coef = 2, type="normal")
+```
+
+
+Here the p-value cutoff is 0.05 for pNF/MPNST
+```{r}
+head(res)
+summary(res)
+```
+
+### check outliers
+```{r outlierCheck}
+par(mar=c(8,5,2,2))
+boxplot(log10(assays(dds)[["cooks"]]), range=0, las=2)
+```
+
+### Gene counts per samp
+```{r geneCountsPerSamp}
+data <- as.data.frame(data.mat)
+data$gene <- row.names(data)
+rownames(data) <- NULL
+
+melted_data <- melt(data)
+
+ggplot(melted_data, aes(x=variable, y=value)) + geom_boxplot()  + theme(axis.text.x = element_text(angle = 45, hjust = 1)) + scale_y_log10() + ggtitle("Gene Counts per Sample") + ylab("log10 Gene Counts") + xlab("Sample")
+```
+
+
+### check dispersion
+Dispersion is a metric for how much the variance differs from the mean in a negative binomial distribution. 
+```{r dispersionCheck}
+plotDispEsts(dds)
+```
+
+### MA plots
+```{r MAplot}
+plotMA(res, ylim=c(-2,2))
+```
+
+logFC shrink
+```{r MAplotLFC}
+plotMA(resLFC, ylim=c(-2,2))
+```
+
+```{r}
+#already have gene names from Sara
+res_df = as.data.frame(dplyr::mutate(as.data.frame(res), sig=ifelse(res$padj<0.05, "FDR<0.05", "Not Sig") ), row.names=rownames(res))
+
+mart <- useDataset("hsapiens_gene_ensembl", useMart("ensembl"))
+
+# write.csv(res_df[1:1000,], file = "output/pNF_v_MPNST_geneList1000.csv", row.names = TRUE)
+write.csv(res_df, file = "JHU_only/data/pNF_v_MPNST_geneList.csv", row.names = TRUE)
+```
+
+### heatmap of count matrix 
+normalized by variance stabilizing transformation and displaying the top 100 highest expressed genes and standardized by the row z-scores
+```{r vsdHeatmap, fig.height=9, fig.width=9}
+vsd <- vst(dds, blind=FALSE)
+# save(vsd, file="data/vsd_remove2009contaminants_protCodingOnly.Rda")
+#rename gene
+vsd_matrix <- SummarizedExperiment::assay(vsd)
+
+# select <- order(rowMeans(counts(dds,normalized=TRUE)),decreasing=TRUE)[1:50]
+select <- order(rowMeans(vsd_matrix),decreasing=TRUE)[1:100]
+
+top_genes <- vsd_matrix[select,]
+head(top_genes)
+
+# top_genes = top_genes - rowMeans(top_genes) # Subtract the row means from each value to standardize
+
+# https://davetang.org/muse/2018/05/15/making-a-heatmap-in-r-with-the-pheatmap-package/
+cal_z_score <- function(x){
+  (x - mean(x)) / sd(x)
+}
+top_genes <- t(apply(top_genes, 1, cal_z_score))
+
+# my_hclust_gene <- hclust(dist(top_genes), method = "complete")
+ 
+# install if necessary
+# install.packages("trimcluster")
+# old_fpc_url <- "https://cran.r-project.org/src/contrib/Archive/fpc/fpc_2.1-10.tar.gz"
+# install.packages(old_fpc_url, repos=NULL, type="source", dependencies = TRUE)
+
+df <- as.data.frame(colData(dds)[,c( "tumorType","isCellLine", "transplantationType")])
+
+colnames(df)[3] <- "isXenograft"
+df$isCellLine <- gsub("false", NA, df$isCellLine)
+
+pheatmap(top_genes, cluster_rows=TRUE, show_rownames=TRUE,
+         cluster_cols=TRUE, annotation_col=df, color = rev(brewer.pal(11, "Spectral")), annotation_legend = T, clustering_distance_rows = "correlation", clustering_distance_cols = "euclidean")
+```
+
+### heatmap of samp to samp distance
+```{r heapmap_samp_to_samp}
+sampleDists <- dist(t(assay(vsd)))
+sampleDistMatrix <- as.matrix(sampleDists)
+rownames(sampleDistMatrix) <- paste(vsd$specimenID, vsd$type, sep="-")
+colnames(sampleDistMatrix) <- NULL
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows=sampleDists,
+         clustering_distance_cols=sampleDists,
+         col=colors, show_rownames = TRUE)
+```
+
+
+
+### pca by sample and tumorType
+```{r pca_samp_tumor, fig.height=8, fig.width=8, warning = FALSE}
+vsd <- vst(dds, blind=FALSE)
+p <- plotPCA(vsd, intgroup=c("individualID", "tumorType", "transplantationType", "isCellLine"), returnData= TRUE)
+percentVar <- round(100 * attr(p, "percentVar"))
+ggplot(p, aes(PC1, PC2, color = individualID, shape= tumorType, label = coalesce(vsd$transplantationType,ifelse(vsd$isCellLine == "true", "cellLine", NA)) )) + geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed() + ggrepel::geom_text_repel()
+```
+
+We are going to use removeBatchEffect from the limma package. 
+
+
+#### removing xenograft status and cell line
+```{r pca_noXenoCellLine, fig.width=8, fig.height=8}
+vsd <- vst(dds, blind=FALSE)
+mat <- assay(vsd)
+vsd$transplantationType[is.na(vsd$transplantationType)] <- "no"
+
+#study is a big batch effect
+mat <- limma::removeBatchEffect(mat, vsd$transplantationType, vsd$isCellLine)
+assay(vsd) <- mat
+
+p <- plotPCA(vsd, intgroup=c("individualID", "tumorType", "transplantationType", "isCellLine"), returnData= TRUE)
+percentVar <- round(100 * attr(p, "percentVar"))
+
+#rename xeno no back to NA
+vsd$transplantationType <- gsub("^no", NA, vsd$transplantationType)
+
+ggplot(p, aes(PC1, PC2, color = individualID, shape= tumorType, label = coalesce(vsd$transplantationType,ifelse(vsd$isCellLine == "true", "cellLine", NA)) )) + geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) +
+  coord_fixed() + ggrepel::geom_text_repel()
+# ggplotly()
+```
+
+### heatmap batch corrected top 50 by padj
+```{r}
+mat_df <- as.data.frame(mat)
+## get protein coding genes
+# mat_prot_df <- subset(mat_df, rownames(mat_df) %in% genes$V1)
+
+mat_prot_df <- mat_df[ head(order(res[rownames(res),]$padj),50), ] # select the top 50 genes with the lowest padj
+mat_prot_df = mat_prot_df - rowMeans(mat_prot_df) # Subtract the row means from each value to standardize
+
+# remove gene name rows
+mat_prot_matrix <- as.matrix(mat_prot_df)
+
+rld <- rlog(dds, blind=F)
+df = as.data.frame(colData(rld)[,c("sex", "tumorType", "isCellLine", "transplantationType")]) # Create a dataframe with a column of the conditions
+rownames(df) = colnames(mat) # add rownames
+# and plot the actual heatmap
+pheatmap(mat_prot_matrix, annotation_col=df, color = rev(brewer.pal(11, "Spectral")))
+
+### add sex, cell line, tumortype, xenograft, 
+### heatmap based on top GO terms
+```
+
+
+### volcano plot
+```{r volnano_plot}
+###https://www.biostars.org/p/282295/
+par(mar=c(5,5,5,5), cex=1.0, cex.main=1.4, cex.axis=1.4, cex.lab=1.4)
+
+topT <- as.data.frame(res)
+
+#Adjusted P values (FDR Q values)
+with(topT, plot(log2FoldChange,  -log10(padj), pch=20, main="Volcano plot", cex=1.0, xlab=bquote(~Log[2]~fold~change), ylab=bquote(~-log[10]~p~adj)))
+with(subset(topT, padj<0.05 & abs(log2FoldChange)>2), points(log2FoldChange, -log10(padj), pch=20, col="red", cex=0.5))
+
+#with(subset(topT, padj<0.05 & abs(log2FoldChange)>2), text(log2FoldChange, -log10(padj), labels=subset(rownames(topT), topT$padj<0.05 & abs(topT$log2FoldChange)>2), cex=0.8, pos=3))
+
+#Add lines for absolute FC>2 and P-value cut-off at FDR Q<0.05
+abline(v=0, col="black", lty=3, lwd=1.0)
+abline(v=-2, col="black", lty=4, lwd=2.0)
+abline(v=2, col="black", lty=4, lwd=2.0)
+abline(h=-log10(max(topT$pvalue[topT$padj<0.05], na.rm=TRUE)), col="black", lty=4, lwd=2.0)
+```
+
+### GO Terms
+
+```{r}
+#https://shiring.github.io/rna-seq/deseq2/teaching/2016/09/29/DESeq2-course
+#get entrezid
+entrez_list <- getBM(filters= "hgnc_symbol", attributes= c("hgnc_symbol", "entrezgene"),values=rownames(mat_df),mart= mart)
+mat_df$hgnc_symbol <- rownames(mat_df)
+mat_df <- inner_join(mat_df, entrez_list, by = "hgnc_symbol")
+```
+
+This is the GO profile using a biological processes subontology
+```{r go_profile, warning = FALSE}
+OrgDb <- org.Hs.eg.db # can also be other organisms
+gene <- na.omit(mat_df$entrezgene)
+
+# Group GO
+ggo <- clusterProfiler::groupGO(gene     = as.character(gene),
+                                OrgDb    = OrgDb,
+                                ont      = "BP",
+                                level    = 3,
+                                readable = TRUE)
+
+barplot(ggo, drop=TRUE, showCategory=12)
+```
+Here are the top 12  profiles. 
+
+### GO over-representation test
+Using a p value and q value of .05, this returns the enrichment GO categories. Shown are the top 6
+```{r}
+# GO over-representation test
+ego <- clusterProfiler::enrichGO(gene          = gene,
+                                 OrgDb         = OrgDb,
+                                 ont           = "BP",
+                                 pAdjustMethod = "BH",
+                                 pvalueCutoff  = 0.05,
+                                 qvalueCutoff  = 0.05, 
+                                 readable      = TRUE)
+
+DT::datatable(head(summary(ego)[,-8]), rownames = FALSE)
+```
+```{r, warning = FALSE}
+top6id <- head(as.data.frame(ego)[,-8])$ID
+
+# write.csv(ego[1:1000,],file="output/pNFvMPNST_GO_overRep1000.csv")
+write.csv(ego,file="JHU_only/data/pNFvMPNST_GO_overRep.csv", row.names = FALSE)
+```
+
+
+```{r}
+go_entrez <- as.numeric(unlist(attributes(ego)$geneSets[ top6id]))
+
+gene_go <- subset(mat_df, mat_df$entrezgene %in% go_entrez)
+gene_go <- unique(gene_go)
+### get entrez id of dds and subset by that and put into heatmap
+```
+
+### Heatmap of genes in top6 GO overrepresented sets
+top 50 genes by padj value that are in the GO overrepresented sets that are standardized by subtracting the rowmean from the count. 
+```{r heatmap_goOverRep}
+### for original vsd
+mat <- assay(vsd)
+mat_df <- as.data.frame(mat)
+mat_df$hgnc_symbol <- rownames(mat_df)
+mat_df <- inner_join(mat_df, entrez_list, by = "hgnc_symbol")
+
+gene_go <- subset(mat_df, mat_df$entrezgene %in% go_entrez)
+gene_go <- unique(gene_go)
+###
+
+select <- order(res[rownames(res),]$padj)[1:500]
+select <- rownames(res[select,])
+
+# select <- order(rowMeans(gene_go[1:24]),decreasing=TRUE)[1:100]
+top_gene_go <- gene_go[ gene_go$hgnc_symbol %in% select,][1:50,]
+top_gene_go[,1:14] = top_gene_go[,1:14] - rowMeans(top_gene_go[,1:14]) # Subtract the row means from each value to standardize
+
+rownames(top_gene_go) <- top_gene_go$hgnc_symbol
+
+# remove gene name rows
+top_gene_go <- as.matrix(top_gene_go[,1:14])
+
+# df = as.data.frame( colData(rld)[,c("study")] ) # Create a dataframe with a column of the conditions
+
+annotation_col <- data.frame(
+        tumorType = colData(rld)[,c("tumorType")],
+        sex = colData(rld)["sex"], 
+        transplantationType = colData(rld)["transplantationType"], 
+        isCellLine = colData(rld)["isCellLine"])
+
+rownames(annotation_col) = colnames(mat) # add rownames
+# and plot the actual heatmap
+pheatmap(top_gene_go, annotation_col=annotation_col, show_colnames = F, show_rownames = T, color = rev(brewer.pal(11, "Spectral")))
+
+```
+
+###Plot of GO enriched genes by category
+Here is a barplot of the GO enriched genes by category
+```{r barplot_GOenrich, fig.width=10}
+barplot(ego, showCategory=25)
+```
+
+```{r dotplot_GOenrich, fig.height=10, fig.width=10}
+clusterProfiler::dotplot(ego, showCategory=25)
+```
+Above is a dotplot of the GO enriched genes by category and showing the gene ratio and padj. 
+
+###KEGG pathways
+```{r, warning=FALSE}
+## KEGG
+kk <- clusterProfiler::enrichKEGG(gene         = gene,
+                 organism     = 'hsa',
+                 pAdjustMethod = "BH",
+                 pvalueCutoff = 0.05,
+                 qvalueCutoff  = 0.05)
+DT::datatable(head(summary(kk)[,-8]), rownames = FALSE)
+```
+```{r}
+write.csv(kk,file="JHU_only/data/pNFvMPNST_KEGG.csv", row.names = FALSE)
+### cluster on GSEA pathways
+```
