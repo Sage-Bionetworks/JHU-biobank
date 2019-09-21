@@ -1,0 +1,313 @@
+---
+title: "RNAseq Patients develop MPNST vs not"
+author: "Xengie Doan"
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    code_folding: hide
+    highlight: haddock
+    latex_engine: xelatex
+    theme: cerulean
+    toc: yes
+    toc_depth: 4
+    toc_float: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy.opts=list(width.cutoff=50), tidy=TRUE, fig.width=12, fig.height=8,fig.path = "/Users/xdoan/Shell/R/MPNSTAnalysis/analysis/MPNST_progression/figs/", dev=c('png', 'pdf'))
+
+pkgs = c("DESeq2", "tidyverse", "RColorBrewer", "pheatmap", "ggplot2", "plotly", "biomaRt", "org.Hs.eg.db", "AnnotationDbi", "clusterProfiler", "reshape2", "knitr" ) #, "profvis") for profiling
+lapply(pkgs, library, character.only = TRUE)
+```
+
+#Objective:
+To analyze the differential expression between individuals who develop MPNST compared to individuals who don't (pNF)
+```{r}
+### load files
+
+load("../data/salmon.result.metadata.Rda")
+syn.query <- salmon.result[salmon.result$specimenID != "2-025 Neurofibroma",]
+metadata.df <- syn.query[,colSums(is.na(syn.query))<nrow(syn.query)]
+cols.keep <- c("specimenID","id","individualID","sex","tumorType","isCellLine","isPrimaryCell","tissue","experimentalCondition","consortium","study", "transplantationType")
+metadata.df <- metadata.df[,cols.keep]
+
+rownames(metadata.df) <- metadata.df$specimenID
+```
+
+
+### filter for protein coding genes
+From the transcript counts step to make sure no unprocessed transcripts, etc are included in the counts. Also only includes genes with gene symbols. 
+```{r}
+load("../data/prot_coding_counts_expData.Rda")
+
+data.mat=reshape2::acast(expData,Symbol~specimenID,value.var="roundedCounts")
+missing=which(apply(data.mat,1,function(x) any(is.na(x))))
+if(length(missing)>0)
+  data.mat=data.mat[-missing,]
+
+### manually change name of 2-004 specID
+colnames(data.mat)[8] <- "2-004 Plexiform Neurofibroma"
+
+### reorder data.mat
+data.mat <- data.mat[,rownames(metadata.df)]
+```
+
+```{r}
+### filter for pNFs that progress/dont to MPNST
+
+# have pNF, have MPNST
+pNF_progress <-(metadata.df %>%
+  filter(individualID %in% c("2-002", "2-003", "2-009", "2-013", "2-015", "2-016", "2-023", "2-031") & tumorType == "Plexiform Neurofibroma") )$specimenID
+
+# have pNF, don't have MPNST
+pNF_noProgress <- (metadata.df %>%
+  filter( !(individualID %in% c("2-002", "2-003", "2-009", "2-013", "2-015", "2-016", "2-023", "2-031")) & tumorType == "Plexiform Neurofibroma") )$specimenID
+
+### just pNF MPNST
+metadata.df_filtered <- metadata.df %>%
+  filter(tumorType=="Plexiform Neurofibroma")
+
+### add progress to MPNST col
+metadata.df_filtered$MPNST_progression <- "progress"
+metadata.df_filtered[which(metadata.df_filtered$specimenID %in% pNF_progress), ]$MPNST_progression <- "progress"
+
+metadata.df_filtered[which(metadata.df_filtered$specimenID %in% pNF_noProgress), ]$MPNST_progression <- "no_progress"
+
+###shorten words and remove spaces for downstream
+metadata.df_filtered$tumorType <- gsub("Plexiform Neurofibroma", "pNF", metadata.df_filtered$tumorType)
+
+filtered_ids <- metadata.df_filtered$specimenID
+
+data.mat <- data.mat[, filtered_ids]
+
+metadata.df_filtered$specimenID <- gsub(" Plexiform Neurofibroma", "pNF", metadata.df_filtered$specimenID)
+
+### change colname in txi to match
+colnames(data.mat) <- metadata.df_filtered$specimenID
+
+rownames(metadata.df_filtered) <- metadata.df_filtered$specimenID
+```
+
+
+### run DESEQ
+filter out counts < 10 and set alpha to .05
+
+```{r, message = FALSE, warning = FALSE}
+# detach("package:synapser", unload=TRUE)
+# unloadNamespace("PythonEmbedInR")
+dds <- DESeqDataSetFromMatrix(countData = data.mat,
+  colData = metadata.df_filtered,
+  design= ~  MPNST_progression)
+
+###filter out reads with low counts
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep,]
+
+dds <- DESeq(dds)
+
+res <- results(dds, alpha = .05)
+
+resultsNames(dds)
+resLFC <- lfcShrink(dds, coef = 2, type="apeglm") # plot looks weird with this type
+# resLFC <- lfcShrink(dds, coef = 3, type="normal")
+```
+
+```{r}
+res
+summary(res)
+```
+The LFC is of the MPNST progress / no progress 
+
+```{r}
+# resLFC
+```
+
+### check outliers
+```{r outlierCheck}
+par(mar=c(8,5,2,2))
+boxplot(log10(assays(dds)[["cooks"]]), range=0, las=2)
+```
+
+
+### check dispersion
+Dispersion is a metric for how much the variance differs from the mean in a negative binomial distribution. 
+```{r dispersionCheck}
+plotDispEsts(dds)
+```
+
+### MA plots
+```{r MAplot}
+plotMA(res) 
+```
+
+logFC shrink
+```{r MAplotLFC}
+plotMA(resLFC) #, ylim=c(-2,2))
+```
+
+```{r}
+res_df = as.data.frame(dplyr::mutate(as.data.frame(res), sig=ifelse(res$padj<0.05, "FDR<0.05", "Not Sig") ), row.names=rownames(res))
+
+mart <- useDataset("hsapiens_gene_ensembl", useMart("ensembl"))
+# mart <- useMart(biomart = "ENSEMBL_MART_ENSEMBL", dataset = "hsapiens_gene_ensembl", host = "uswest.ensembl.org")
+write.csv(res_df, file = "MPNST_progression/output/pNF_v_MPNST_geneList.csv", row.names = TRUE)
+```
+
+
+### heatmap of standardized vsd count matrix 
+normalized by variance stabilizing transformation and displaying the top 50 highest expressed genes
+```{r vsdHeatmap, fig.height=9, fig.width=9}
+vsd <- vst(dds, blind=FALSE)
+#rename gene
+vsd_matrix <- SummarizedExperiment::assay(vsd)
+
+select <- order(rowMeans(vsd_matrix),decreasing=TRUE)[1:50]
+
+top_genes <- vsd_matrix[select,]
+
+top_genes = top_genes - rowMeans(top_genes) # Subtract the row means from each value to standardize
+
+df <- as.data.frame(colData(dds)[,c("sex", "MPNST_progression")])
+
+pheatmap(top_genes, cluster_rows=TRUE, show_rownames=TRUE,
+         cluster_cols=TRUE, annotation_col=df, color = rev(brewer.pal(11, "Spectral")))
+```
+Just by highest expressed genes they don't cluster as expected, there is a pNF with no MPST progression that doesn't cluster with other no MPST progression individuals
+
+### heatmap of vsd top 50 padj standardized 
+```{r}
+rld <- rlog(dds, blind=F)
+# exp_matrix <- SummarizedExperiment::assay(rld)
+# ### top 100
+# select <- order(rowMeans(exp_matrix), decreasing=TRUE)[1:20]
+# top100 <- exp_matrix[select,]
+# annotation_data <- as.data.frame(colData(rld)["MPNST_progression"] )
+# pheatmap(exp_matrix, annotation_col=annotation_data, color = rev(brewer.pal(11, "Spectral")))
+
+
+mat <- assay(vsd)
+mat_df <- as.data.frame(mat)
+
+mat_prot_df <- mat_df[ head(order(res[rownames(res),]$padj),50), ] # select the top 50 genes with the lowest padj
+mat_prot_df = mat_prot_df - rowMeans(mat_prot_df) # Subtract the row means from each value to standardize
+
+## remove gene name rows
+mat_prot_matrix <- as.matrix(mat_prot_df)
+
+df = as.data.frame(colData(rld)[,c("sex", "MPNST_progression")]) # Create a dataframe with a column of the conditions
+rownames(df) = colnames(mat) # add rownames
+# and plot the actual heatmap
+pheatmap(mat_prot_matrix, annotation_col=df, color = rev(brewer.pal(11, "Spectral")))
+
+
+```
+
+
+### heatmap of samp to samp distance
+```{r heapmap_samp_to_samp}
+sampleDists <- dist(t(assay(vsd)))
+sampleDistMatrix <- as.matrix(sampleDists)
+rownames(sampleDistMatrix) <- paste(vsd$specimenID, vsd$MPNST_progression, sep="-")
+colnames(sampleDistMatrix) <- NULL
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows=sampleDists,
+         clustering_distance_cols=sampleDists,
+         col=colors, show_rownames = TRUE)
+```
+
+They don't cluster by progression type
+
+
+### pca by sample and sex
+```{r pca_samp_tumor, fig.height=8, fig.width=8, warning = FALSE}
+p <- plotPCA(vsd, intgroup=c("individualID", "MPNST_progression", "sex"), returnData= TRUE)
+percentVar <- round(100 * attr(p, "percentVar"))
+ggplot(p, aes(PC1, PC2, color = individualID, shape= sex, label = vsd$MPNST_progression ) ) + geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed() + ggrepel::geom_text_repel()
+```
+
+
+### volcano plot
+```{r volnano_plot}
+###https://www.biostars.org/p/282295/
+par(mar=c(5,5,5,5), cex=1.0, cex.main=1.4, cex.axis=1.4, cex.lab=1.4)
+
+topT <- as.data.frame(res)
+
+#Adjusted P values (FDR Q values)
+with(topT, plot(log2FoldChange,  -log10(padj), pch=20, main="Volcano plot", cex=1.0, xlab=bquote(~Log[2]~fold~change), ylab=bquote(~-log[10]~p~adj )))
+with(subset(topT, padj<0.05 & abs(log2FoldChange)>2), points(log2FoldChange, -log10(padj), pch=20, col="red", cex=1))
+
+#Add lines for absolute FC>2 and P-value cut-off at FDR Q<0.05
+abline(v=0, col="black", lty=3, lwd=1.0)
+abline(v=-2, col="black", lty=4, lwd=2.0)
+abline(v=2, col="black", lty=4, lwd=2.0)
+abline(h=-log10(max(topT$pvalue[topT$padj<0.05], na.rm=TRUE)), col="black", lty=4, lwd=2.0)
+```
+
+
+### GO Terms
+
+```{r}
+#https://shiring.github.io/rna-seq/deseq2/teaching/2016/09/29/DESeq2-course
+#get entrezid
+entrez_list <- getBM(filters= "hgnc_symbol", attributes= c("hgnc_symbol", "entrezgene"),values=rownames(mat_df), mart= mart)
+mat_df$hgnc_symbol <- rownames(mat_df)
+mat_df <- inner_join(mat_df, entrez_list, by = "hgnc_symbol")
+```
+
+This is the GO profile using a biological processes subontology
+```{r go_profile, warning = FALSE}
+OrgDb <- org.Hs.eg.db # can also be other organisms
+gene <- na.omit(mat_df$entrezgene)
+
+# Group GO
+ggo <- clusterProfiler::groupGO(gene     = as.character(gene),
+                                OrgDb    = OrgDb,
+                                ont      = "BP",
+                                level    = 3,
+                                readable = TRUE)
+
+barplot(ggo, drop=TRUE, showCategory=12)
+```
+
+### GO over-representation test
+Using a p value and q value of .05, this returns the enrichment GO categories. Shown are the top 6
+```{r}
+# GO over-representation test
+ego <- clusterProfiler::enrichGO(gene          = gene,
+                                 OrgDb         = OrgDb,
+                                 ont           = "BP",
+                                 pAdjustMethod = "BH",
+                                 pvalueCutoff  = 0.05,
+                                 qvalueCutoff  = 0.05, 
+                                 readable      = TRUE)
+
+DT::datatable(head(summary(ego)[,-8]), rownames = FALSE)
+```
+
+```{r}
+write.csv(ego,file="MPNST_progression/output/pNFvMPNST_GO_overRep.csv", row.names = FALSE)
+
+```
+
+
+
+###KEGG pathways
+```{r, warning=FALSE}
+## KEGG
+kk <- clusterProfiler::enrichKEGG(gene         = gene,
+                 organism     = 'hsa',
+                 pAdjustMethod = "BH",
+                 pvalueCutoff = 0.05,
+                 qvalueCutoff  = 0.05)
+DT::datatable(head(summary(kk)[,-8]), rownames = FALSE)
+```
+
+```{r}
+write.csv(kk,file="MPNST_progression/output/pNFvMPNST_KEGG.csv", row.names = FALSE)
+```
+
