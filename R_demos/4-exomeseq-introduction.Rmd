@@ -63,8 +63,7 @@ Please look up the SynID of the relevant data table and access it using the __sy
 
 ```{r load data, eval=TRUE, results='show', message=FALSE, warning=FALSE}
 
-entity <- synGet("syn20554939")  # download file 
-exome_data <- synTableQuery("SELECT * FROM syn20554939")$asDataFrame()
+exome_data <- synTableQuery("SELECT * FROM syn20812188")$asDataFrame()
 
 ```
 &nbsp;
