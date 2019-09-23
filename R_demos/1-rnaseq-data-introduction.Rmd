@@ -71,10 +71,8 @@ synLogin()
 
 #### Download the harmonized file
 
-# Set file entity that can be changed easily for different files [User Input]
-fileEntity <- synGet('syn20449214')
 # Download the data file - this is a large file and will take a while, please be patient! 
-genes.with.meta <- synTableQuery("SELECT * FROM syn20449214")$asDataFrame()
+genes.with.meta <- synTableQuery("SELECT * FROM syn20812185")$asDataFrame()
 ```
 
 # Exploring the data files
