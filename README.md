@@ -1,6 +1,6 @@
 <p align="center">
 </p>
-_JHU Biobank Code Repository_
+# JHU Biobank Code Repository_
 
 ## RNA-Seq Processing and Figures
 link to RNA-seq table, code
