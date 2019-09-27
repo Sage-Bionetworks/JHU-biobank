@@ -1,9 +1,20 @@
 <p align="center">
 </p>
+# JHU Biobank Code Repository
+
+## RNA-Seq Processing and Figures
+link to table, code
+
+## Exome-seq Processing and Figures
+linke to table, code
+
+### Variant plotting
+
+### Copy number plotting
 
 
 
-## How to use this repository
+## Demonstration notebookws
 
 We've prepared Docker containers that contain all of the necessary dependencies to retrieve data from Synapse and perform some basic analyses of these data. The goal of this is to help you orient yourself to the data prior to the event in September.
 We've created containers for both R and Python users. You can find instructions on running these containers and following the data demos below.
