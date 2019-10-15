@@ -129,7 +129,7 @@ color_list <- c(allcolors, morecolors1, morecolors2)
 ## Oncoplot showing all the samples and all genes that are important for cNF and MPNST
 
 # Make "maf object" to work with maftools for easy visualization 
-jhu_maf <- merge_mafs(c(jhu_anno_new$filepath), verbose = TRUE, clinicalData = jhu_anno_new) 
+jhu_maf <- maf_tools::merge_mafs(c(jhu_anno_new$filepath), verbose = TRUE, clinicalData = jhu_anno_new) 
 
 # Make oncoplot for all samples for specific genes (top column bar shows mutational burden of the samples, row bar on the right shows frequency of mutations per gene)
 png("Scidata_fig_1_allsamples_oncoplot.png",height = 800, width = 1800 )

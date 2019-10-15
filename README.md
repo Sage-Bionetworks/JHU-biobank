@@ -11,27 +11,55 @@ These instructions assume that you:
 * have [installed Docker Community Edition](https://docs.docker.com/v17.12/install/) and that the docker service is running on your machine
 * are running a Unix-based OS, such as Ubuntu or Mac. These instructions have not been tested on Windows-based platforms. If you are using Google Cloud Platform, please see the [Google Cloud Docker instructions](#google-cloud).
 
+## Samples available
+We are constantly updating the data available. To find an up-to-date list please log into the Synapse site and click [this link](https://www.synapse.org/#!Synapse:syn13363852/tables/query/eyJzcWwiOiJTRUxFQ1QgZGlzdGluY3QgaW5kaXZpZHVhbElELHNwZWNpbWVuSUQsYXNzYXkgRlJPTSBzeW4xMzM2Mzg1MiB3aGVyZSBhY2Nlc3NUeXBlIDw+ICdQUklWQVRFJyIsICJpbmNsdWRlRW50aXR5RXRhZyI6dHJ1ZSwgImlzQ29uc2lzdGVudCI6dHJ1ZSwgIm9mZnNldCI6MCwgImxpbWl0IjoyNX0=)
+
 
 ## RNA-Seq and Exome-seq processing
 
 The RNA-seq and Exome-Seq data is available in tabular form on the [JHU Biobank Synapse Site](http://synapse.org/jhubiobank)
-* [RNA-Seq Counts]()
-* [Germline variant calls]()
+* [RNA-Seq Counts](https://www.synapse.org/#!Synapse:syn20812185/tables/)
+* [Germline variant calls](https://www.synapse.org/#!Synapse:syn20812188/tables/)
 
-These were processed by independent pipelines that can be found in the [Sage Bionetworks Rare Disease Workflows]() repository. 
+These were processed by independent pipelines that can be found in the [Sage Bionetworks Rare Disease Workflows](https://github.com/sage-bionetworks/rare-disease-workflows) repository. 
 
 Specifically the YAML file input for the RNA-Seq data is as follows:
+```
+synapse_config:
+  class: File
+  path: "/home/sgosline/.synapseConfig"
+indexid: syn18134565
+index-type: gencode
+index-dir: gencode_v29
+idquery: SELECT specimenID,id,readPair FROM syn13363852 WHERE ( ( "assay" = 'rnaSeq' ) AND ( "fileFormat" = 'fastq' ) AND ( "sciDataRelease" = 'true' ) ) order by specimenID
+sample_query: SELECT distinct specimenID,individualID,assay,dataType,sex,consortium,study,diagnosis,tumorType,species,fundingAgency,resourceType,nf1Genotype,nf2Genotype,studyName FROM syn13363852 WHERE ( ( "assay" = 'rnaSeq' ) AND ( "fileFormat" = 'fastq' ) AND ( "sciDataRelease" = 'true' ) )
+parentid: syn17077846
+group_by: specimenID
+tableparentid: 
+        - syn4939902
+tablename: 
+        - Biobank RNASeq Data
+```
 
-The YAML input file for the exome seq is:
-
-
+The YAML file for the Exome seq harmonization is below:
+```
+vep-file-id: syn18491780
+synapse_config:
+  class: File
+  path: /Users/rallaway/.synapseConfig
+parentid: syn20540114
+group_by: mafid
+input-query: SELECT id FROM syn11818313 WHERE ( ( "fileFormat" = 'vcf' ) AND ( "isMultiSpecimen" = 'FALSE' ) AND ( "assay" = 'exomeSeq' ) ) 
+clinical-query: SELECT distinct id as mafid,specimenID,individualID,assay,dataType,sex,consortium,diagnosis,tumorType,species,fundingAgency,resourceType,nf1Genotype,nf2Genotype,studyName from syn11818313
+indexfile:
+  class: File
+  path: index.fa
+```
+  
 
 ## RNA-seq and Exome-Seq figures
 
-
-### Copy number plotting of 2-031
-
-
+The code to generate the omics figures in the manuscript can be found in the [figs](figs/) directory. Specifically the ExomeSeq markdown can be viewed [here]() and the RNASeq markdown can be viewed [here](). 
 
 ## Demonstration notebooks
 

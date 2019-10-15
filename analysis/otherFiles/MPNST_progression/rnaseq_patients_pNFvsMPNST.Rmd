@@ -14,7 +14,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, tidy.opts=list(width.cutoff=50), tidy=TRUE, fig.width=12, fig.height=8,fig.path = "/Users/xdoan/Shell/R/MPNSTAnalysis/analysis/MPNST_progression/figs/", dev=c('png', 'pdf'))
+knitr::opts_chunk$set(echo = TRUE, tidy.opts=list(width.cutoff=50), tidy=TRUE, fig.width=12, fig.height=8,fig.path = ".", dev=c('png', 'pdf'))
 
 pkgs = c("DESeq2", "tidyverse", "RColorBrewer", "pheatmap", "ggplot2", "plotly", "biomaRt", "org.Hs.eg.db", "AnnotationDbi", "clusterProfiler", "reshape2", "knitr" ) #, "profvis") for profiling
 lapply(pkgs, library, character.only = TRUE)
@@ -150,7 +150,7 @@ res_df = as.data.frame(dplyr::mutate(as.data.frame(res), sig=ifelse(res$padj<0.0
 
 mart <- useDataset("hsapiens_gene_ensembl", useMart("ensembl"))
 # mart <- useMart(biomart = "ENSEMBL_MART_ENSEMBL", dataset = "hsapiens_gene_ensembl", host = "uswest.ensembl.org")
-write.csv(res_df, file = "MPNST_progression/output/pNF_v_MPNST_geneList.csv", row.names = TRUE)
+write.csv(res_df, file = "pNF_v_MPNST_geneList.csv", row.names = TRUE)
 ```
 
 
@@ -254,7 +254,7 @@ abline(h=-log10(max(topT$pvalue[topT$padj<0.05], na.rm=TRUE)), col="black", lty=
 ```{r}
 #https://shiring.github.io/rna-seq/deseq2/teaching/2016/09/29/DESeq2-course
 #get entrezid
-entrez_list <- getBM(filters= "hgnc_symbol", attributes= c("hgnc_symbol", "entrezgene"),values=rownames(mat_df), mart= mart)
+entrez_list <- getBM(filters= "hgnc_symbol", attributes= c("hgnc_symbol", "entrezgene_id"),values=rownames(mat_df), mart= mart)
 mat_df$hgnc_symbol <- rownames(mat_df)
 mat_df <- inner_join(mat_df, entrez_list, by = "hgnc_symbol")
 ```
@@ -290,7 +290,7 @@ DT::datatable(head(summary(ego)[,-8]), rownames = FALSE)
 ```
 
 ```{r}
-write.csv(ego,file="MPNST_progression/output/pNFvMPNST_GO_overRep.csv", row.names = FALSE)
+write.csv(ego,file="pNFvMPNST_GO_overRep.csv", row.names = FALSE)
 
 ```
 
@@ -308,6 +308,6 @@ DT::datatable(head(summary(kk)[,-8]), rownames = FALSE)
 ```
 
 ```{r}
-write.csv(kk,file="MPNST_progression/output/pNFvMPNST_KEGG.csv", row.names = FALSE)
+write.csv(kk,file="pNFvMPNST_KEGG.csv", row.names = FALSE)
 ```
 

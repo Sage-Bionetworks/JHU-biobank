@@ -1,2 +1,2 @@
-source("../data_access/RNASeqData.R")
+source("data_access/RNASeqData.R")
 
