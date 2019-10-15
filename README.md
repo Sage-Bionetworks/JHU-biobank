@@ -1,16 +1,33 @@
 <p align="center">
 </p>
-# JHU Biobank Code Repository_
+# JHU Biobank Code Repository
 
-## RNA-Seq Processing and Figures
-link to RNA-seq table, code
+This repository contains the information about the RNA-seq processing and figure generation for the Scientific Data Biobank Manuscript.
 
-## Exome-seq Processing and Figures
-link to germline variant table
-link to somatic table
+## Prerequisites
+These instructions assume that you:
+* have registered for a [Synapse account](https://www.synapse.org/#!RegisterAccount:0)
+* have followed the [Getting Samples and Data](https://www.synapse.org/#!Synapse:syn4939902/wiki/593715) instructions on Synapse.
+* have [installed Docker Community Edition](https://docs.docker.com/v17.12/install/) and that the docker service is running on your machine
+* are running a Unix-based OS, such as Ubuntu or Mac. These instructions have not been tested on Windows-based platforms. If you are using Google Cloud Platform, please see the [Google Cloud Docker instructions](#google-cloud).
 
-### Variant plotting
-describe markdown
+
+## RNA-Seq and Exome-seq processing
+
+The RNA-seq and Exome-Seq data is available in tabular form on the [JHU Biobank Synapse Site](http://synapse.org/jhubiobank)
+* [RNA-Seq Counts]()
+* [Germline variant calls]()
+
+These were processed by independent pipelines that can be found in the [Sage Bionetworks Rare Disease Workflows]() repository. 
+
+Specifically the YAML file input for the RNA-Seq data is as follows:
+
+The YAML input file for the exome seq is:
+
+
+
+## RNA-seq and Exome-Seq figures
+
 
 ### Copy number plotting of 2-031
 
@@ -22,13 +39,6 @@ We've prepared Docker containers that contain all of the necessary dependencies 
 We've created containers for both R and Python users. You can find instructions on running these containers and following the data demos below.
 If you like, you can also use these containers as a basis for creating your own Docker containers during the hackathon so that others can reproduce your analyses.
 
-### Prerequisites
-
-These instructions assume that you:
-* have registered for a [Synapse account](https://www.synapse.org/#!RegisterAccount:0)
-* have followed the [Getting Samples and Data](https://www.synapse.org/#!Synapse:syn4939902/wiki/593715) instructions on Synapse.
-* have [installed Docker Community Edition](https://docs.docker.com/v17.12/install/) and that the docker service is running on your machine
-* are running a Unix-based OS, such as Ubuntu or Mac. These instructions have not been tested on Windows-based platforms. If you are using Google Cloud Platform, please see the [Google Cloud Docker instructions](#google-cloud).
 
 ### RStudio Docker Image (Local)
 
