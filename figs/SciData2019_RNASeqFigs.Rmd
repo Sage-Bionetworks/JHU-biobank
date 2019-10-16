@@ -1,0 +1,134 @@
+---
+title: "SciDataRelease_RNAFigs"
+author: "Sara Gosline"
+date: "10/15/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(tidyverse)
+
+```
+
+## Define functions to apply
+
+First we define some basic funcitons that do what we want.
+
+```{r, echo=FALSE, warning=FALSE}
+
+
+sampleCounts<-function(tab,prefix){
+  counts<-dplyr::select(tab,c('specimenID','individualID','nf1Genotype','nf2Genotype','tumorType','diagnosis','isCellLine','transplantationType'))%>%
+    group_by(.dots=c('diagnosis','tumorType','nf1Genotype','nf2Genotype','isCellLine','transplantationType'))%>%
+    summarize(individuals=n_distinct(individualID),samples=n_distinct(specimenID))
+  counts
+}
+
+# PCA plot
+plotPCA<-function(dds,prefix=''){
+  #tab, xlim=0,ylim=0,scale=FALSE,prefix=''){
+  require(ggplot2)
+  vsd <- vst(dds, blind = FALSE)
+  
+  p <- DESeq2::plotPCA(vsd, intgroup = c("individualID", "tumorType", 
+    "sampleType"), returnData = TRUE)
+  
+  percentVar <- round(100 * attr(p, "percentVar"))
+  pdf(paste(prefix,'RNASeqDataPCA.pdf',sep=''),width='960',height='960')
+  
+  p2<-ggplot(p, aes(PC1, PC2, color = tumorType, shape = sampleType, 
+    label = vsd$individualID)) + geom_point(size = 3) + 
+    xlab(paste0("PC1: ", percentVar[1], "% variance")) + 
+    ylab(paste0("PC2: ", percentVar[2], "% variance")) + 
+    coord_fixed() + ggrepel::geom_text_repel()
+  
+  print(p2)
+  dev.off()
+  p2
+  
+}
+
+plotCounts<-function(tab,prefix=''){
+  require(ggplot)
+  pdf(paste0(prefix,'rnaSeqCountsBoxplot.pdf'),width='960',height='960')
+  p<-ggplot(tab)+geom_boxplot(aes(x=specimenID,y=zScore,fill=tumorType))+scale_y_log10()+theme(axis.text.x = element_text(angle = 90)) 
+  print(p)
+  dev.off()
+  p
+}
+
+getDDS<-function(tab){
+  require(DESeq2)
+#  detach('package:synapser', unload=TRUE)
+#  unloadNamespace('PythonEmbedInR')
+  samps<-dplyr::select(tab,tumorType,specimenID,sampleType,individualID)%>%distinct()
+  rownames(samps)<-samps$specimenID
+  mat<-reshape2::acast(tab,Symbol~specimenID,value.var='totalCounts',fun.aggregate=sum)
+  
+  dds <- DESeq2::DESeqDataSetFromMatrix(countData = round(mat[,samps$specimenID]), 
+    colData =samps,design = ~tumorType)
+  #copied from Xengie's markdwon
+  ### filter out reads with low counts
+  keep <- rowSums(counts(dds)) >= 10
+  dds <- dds[keep, ]
+  
+  dds <- DESeq(dds)
+  dds
+}
+
+
+```
+
+
+## Get data
+All the data for the RNA-seq work is on [Synapse]() im table `syn20812185`.
+
+```{r data, echo=FALSE, warning=FALSE}
+require(synapser)
+synLogin()
+
+##get table query
+tab<-synTableQuery('select * from syn20812185 where ( ( "studyName" = \'A Nerve Sheath Tumor Bank from Patients with NF1\' ) )')$asDataFrame()
+
+tab$sampleType<-apply(tab,1,function(x){
+  if(!is.na(x[['transplantationType']]) && x[['transplantationType']]=='xenograft')
+    return('xenograft')
+  else if (!is.na(x[['isCellLine']])&&x[['isCellLine']]==TRUE)
+    return('cell line')
+  else
+    return('tissue')})
+
+tab$specimenID<-sapply(tab$specimenID,function(x)
+  gsub('Neurofibroma','NF',
+    gsub("Plexiform ",'p',
+      gsub('Cutaneous ',"c",
+        gsub('Malignant Peripheral Nerve Sheath Tumor','MPNST',x)))))
+
+prefix='jhuBiobank'
+detach("package:synapser", unload=TRUE)
+unloadNamespace("PythonEmbedInR")
+```
+
+## Plot status
+
+First we plot the counts across samples
+```{r counts, echo=FALSE,warning=FALSE}
+#get sample counds
+countsTab<-sampleCounts(tab,prefix)
+
+
+#plotCounts
+plotCounts(tab,prefix)
+
+
+```
+
+Then we can plot the samples
+```{r pca, echo=FALSE,warning=FALSE}
+
+dds<-getDDS(tab)
+
+#doPCA
+plotPCA(dds,prefix)
+```
