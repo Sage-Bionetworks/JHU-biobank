@@ -29,6 +29,7 @@ library(BiocManager)
 library(gProfileR)
 library(tidyverse)
 library(DT)
+library(stringr) 
 library(maftools)
 library(GenVisR)
 library(RColorBrewer)
@@ -43,38 +44,29 @@ synLogin()
 
 The code below makes figures for the Scientific Data Paper showcasing the JHU Biobank data.
 
-```{r extracting annotations for each study, echo=FALSE, eval=TRUE, results='hide', message=FALSE, warning=FALSE}
+```{r makingmaf files from SynTables, echo=FALSE, eval=TRUE, results='hide', message=FALSE, warning=FALSE}
 
-#Extract the annotation file from Synapse:
-jhu_files <- synTableQuery("SELECT * FROM syn13363852 WHERE assay = 'exomeSeq' AND fileFormat = 'vcf' AND name LIKE '%.vcf.gz' AND sciDataRelease = 'true' ")$asDataFrame()
-jhu_anno_select <- jhu_files
+biobank_public_query <- "SELECT * FROM syn20554939 WHERE study = 'JHU NTAP Biobank' "
+jhu_biobank_table <- synTableQuery(biobank_public_query)$asDataFrame()
 
-#Add tumor barcode column to annotations to match MAF file tumor code
-jhu_anno_select$Tumor_Sample_Barcode <- gsub("[[:alpha:]_\\.*]", "", jhu_anno_select$name) 
+#Make MAF from table dataframe
+jhu_public_maf <- jhu_biobank_table[, c(3:135)]
+jhu_public_clindata <- unique(jhu_biobank_table[,c(3,136:154)])
 
-# Select specific columns for ease of use
-jhu_anno_new <- subset(jhu_anno_select, select=c("id", "name", "age", "assay", "diagnosis", "individualID", "nf1Genotype",
-                                                 "tissue", "nf2Genotype", "isCellLine","transplantationType", "sex", "species", 
-                                                 "specimenID", "study", "studyId", "tumorType", "Tumor_Sample_Barcode"))
+#Add sampleType to clinical data
+jhu_public_clindata$sampleType <- "Tissue"
+jhu_public_clindata$sampleType[jhu_public_clindata$isCellLine==TRUE] <- "Cell Line"
+#add xenograft as sample type
+jhu_public_clindata$sampleType[(!is.na(str_match(jhu_public_clindata$specimenID,"Xenograft"))) ] <- "Xenograft"
 
+#Make clinical data file for normal and tumor data
+jhu_public_clindata_normal <- jhu_public_clindata[(jhu_public_clindata$tumorType == "Normal"),]
+jhu_public_clindata_tumor <- jhu_public_clindata[(jhu_public_clindata$tumorType != "Normal"),]
 
-#Add tumor annotation to replace NA
-jhu_anno_new$tumorType[(jhu_anno_new$tissue == "Buffy Coat")] <- "Normal"
-jhu_anno_new$tumorType[str_detect(jhu_anno_new$specimenID, "Blood")] <- "Normal"
-jhu_anno_new$tumorType[(jhu_anno_new$tissue == "Skin")] <- "Normal"
-jhu_anno_new$tumorType[str_detect(jhu_anno_new$specimenID, "Neurofibroma")] <- "Neurofibroma"
-
-#Add MAF filepath column to annotation file ( this assumes that you have downloaded the relevant original maf files from https://www.synapse.org/#!Synapse:syn19046889 )
-jhu_anno_new <- 
-  jhu_anno_new %>%
-  mutate(filepath = paste("/home/jbanerjee/maf_data/", Tumor_Sample_Barcode, ".vep.maf")) %>%
-  as.data.frame()
-
-#remove unwanted space in filepath
-jhu_anno_new$filepath <- gsub(" ", "", jhu_anno_new$filepath) 
-
-#select all rows that have assigned individual ids (get rid of any row that is not a bonafide sample)
-jhu_anno_new <- jhu_anno_new[(is.na(jhu_anno_new$individualID) == FALSE), ]
+# Make MAF object for Maftools
+jhu_public_maf_all <- read.maf(jhu_public_maf, clinicalData = jhu_public_clindata)
+jhu_normal_file <- subsetMaf(jhu_public_maf_all, tsb = c(jhu_public_clindata_normal$Tumor_Sample_Barcode))
+jhu_tumor_file <- subsetMaf(jhu_public_maf_all, tsb = c(jhu_public_clindata_tumor$Tumor_Sample_Barcode))
 
 
 ##### NOTE #####
@@ -94,30 +86,23 @@ Make a plot of all the NF1 pathogenic variants from the mafs that we are releasi
 
 ```{r all_sample_oncoplot, echo= FALSE, eval=TRUE, fig.height=8,fig.width=15, results='show', message=FALSE, warning=FALSE}
 
-#Add sampleType annotation column for the figure
-jhu_anno_new$sampleType <- "Tissue"
-jhu_anno_new$sampleType[jhu_anno_new$isCellLine==TRUE] <- "Cell Line"
-jhu_anno_new$sampleType[jhu_anno_new$transplantationType=="xenograft"] <- "Xenograft"
-
 ###### Make color scheme for plots ########
 
 ## Make colors for plots
 fabcolors = RColorBrewer::brewer.pal(n = 11,name = 'RdGy')
 col = RColorBrewer::brewer.pal(n = 10,name = 'PRGn')
 allcolors <- c(fabcolors, col)
-sampleID <- sort(unique(as.character(unique(jhu_anno_new$individualID))))
+sampleID <- sort(unique(as.character(unique(jhu_public_clindata$individualID))))
 names(allcolors) = c(sampleID)
 allcolors <- list(allcolors)
 
 morecolors1 <- wes_palette("Darjeeling1", n=4, type = "discrete")
-#morecolors1 = RColorBrewer::brewer.pal(n = 4,name = 'BrBG')
-tumortypes <- sort(unique(as.character(unique(jhu_anno_new$tumorType))))
+tumortypes <- sort(unique(as.character(unique(jhu_public_clindata$tumorType))))
 names(morecolors1) <- c(tumortypes)
 morecolors1 <- list(morecolors1)
 
 morecolors2 <- wes_palette("Moonrise2", n=3, type = "discrete")
-#morecolors2 = RColorBrewer::brewer.pal(n = 3,name = 'Accent')
-sampletype <- sort(unique(as.character(unique(jhu_anno_new$sampleType))))
+sampletype <- sort(unique(as.character(unique(jhu_public_clindata$sampleType))))
 names(morecolors2) = c(sampletype)
 morecolors2 <- list(morecolors2)
 
@@ -129,18 +114,16 @@ color_list <- c(allcolors, morecolors1, morecolors2)
 ## Oncoplot showing all the samples and all genes that are important for cNF and MPNST
 
 require(maftools)
-# Make "maf object" to work with maftools for easy visualization 
-jhu_maf <- merge_mafs(c(jhu_anno_new$filepath), verbose = TRUE, clinicalData = jhu_anno_new) 
 
 # Make oncoplot for all samples for specific genes (top column bar shows mutational burden of the samples, row bar on the right shows frequency of mutations per gene)
 png("Scidata_fig_1_allsamples_oncoplot.png",height = 800, width = 1800 )
-oncoplot(jhu_maf, genes = c("NF1","PIK3CA", "SUZ12", "EGFR", "ASTE1", "MEK1", "MEK2", "LRP1B", "MSH3", "PDCD1", "S1PR2", "EED", "EZH2"),
-         drawRowBar = TRUE, drawColBar = TRUE, logColBar = FALSE,
-         clinicalFeatures = c("individualID", "tumorType", "sampleType"),
-         sortByAnnotation = TRUE, annotationColor = color_list, groupAnnotationBySize = FALSE, 
-         keepGeneOrder = TRUE, GeneOrderSort = TRUE, removeNonMutated = FALSE, 
-         SampleNamefont = 5,annotationFontSize = 1.8, fontSize = 1.0,legendFontSize = 1.8,
-         titleFontSize = 1.5, bgCol = "white", borderCol = "white")
+oncoplot(jhu_public_maf_all, genes = c("NF1","PIK3CA", "SUZ12", "EGFR", "ASTE1", "MEK1", "MEK2", "LRP1B", "MSH3", "PDCD1", "S1PR2", "EED", "EZH2"),
+           drawRowBar = TRUE, drawColBar = TRUE,
+           clinicalFeatures = c("individualID", "tumorType", "sampleType"),
+           sortByAnnotation = TRUE, annotationColor = color_list, groupAnnotationBySize = FALSE, GeneOrderSort = TRUE,
+           removeNonMutated = FALSE, logColBar = FALSE,
+           SampleNamefont = 5,annotationFontSize = 1.8, fontSize = 1.0,legendFontSize = 1.8,
+           titleFontSize = 1.5, keepGeneOrder = TRUE, bgCol = "white", borderCol = "white")
 dev.off()
 
 ```
@@ -154,22 +137,21 @@ We were able to crosscheck other samples in the bank with their clinical sequenc
 ```{r sample 2-031, echo= FALSE, eval=TRUE, fig.height=8,fig.width=8, results='show', message=FALSE, warning=FALSE}
 
 #Select specific sample files (select only the normal tissue and MPNST tissue and cell line samples)
-sample_2031 <- subset(jhu_anno_new, assay == "exomeSeq" & individualID == "2-031" & specimenID != "2-031 Xenograft")
-
+sample_2031 <- jhu_public_clindata[(jhu_public_clindata$individualID == "2-031" & jhu_public_clindata$specimenID != "2-031 Xenograft"),]
 
 #Make Maf file for sample 2-031
-jhu_sample_2031 <- merge_mafs(c(sample_2031$filepath), verbose = TRUE, clinicalData = sample_2031) 
+jhu_sample_2031 <- subsetMaf(jhu_public_maf_all, tsb = c(sample_2031$Tumor_Sample_Barcode)) 
 
 # Make oncoplot to show the SNPs and mutation of the samples in various genes of interest
 print("Fig 1 : Sample 2-031")
 png("Sample_2-031.png", width=800, height = 800)
 oncoplot(jhu_sample_2031, genes = c("NF1","PIK3CA", "PRC2","MEK1", "MEK2", "SUZ12", "ASTE1", "EGFR", "LRP1B", "MSH3", "PDCD1", "S1PR2", "EED", "EZH2"),
-         drawRowBar = TRUE, drawColBar = TRUE,logColBar = FALSE,
-         clinicalFeatures = c("tumorType", "sampleType","individualID"),
-         sortByAnnotation = TRUE, annotationColor = color_list, groupAnnotationBySize = FALSE,
-         keepGeneOrder = TRUE, GeneOrderSort = TRUE, removeNonMutated = FALSE, 
-         SampleNamefont = 5,annotationFontSize = 1.5, fontSize = 1,legendFontSize = 1.8,
-         titleFontSize = 1.0, bgCol = "white", borderCol = "white")
+           drawRowBar = TRUE, drawColBar = TRUE,
+           clinicalFeatures = c("tumorType", "sampleType","individualID"),
+           sortByAnnotation = TRUE, annotationColor = color_list, groupAnnotationBySize = FALSE, 
+           removeNonMutated = FALSE, logColBar = FALSE,
+           SampleNamefont = 5,annotationFontSize = 1.5, fontSize = 1,legendFontSize = 1.8,
+           titleFontSize = 1.0, keepGeneOrder = TRUE, GeneOrderSort = TRUE, bgCol = "white", borderCol = "white")
 dev.off()
 
 ```
