@@ -144,7 +144,7 @@ jhu_sample_2031 <- subsetMaf(jhu_public_maf_all, tsb = c(sample_2031$Tumor_Sampl
 
 # Make oncoplot to show the SNPs and mutation of the samples in various genes of interest
 print("Fig 1 : Sample 2-031")
-png("Sample_2-031.png", width=800, height = 800)
+pdf("Sample_2-031.pdf")#, width=800, height = 800)
 oncoplot(jhu_sample_2031, genes = c("NF1","PIK3CA", "PRC2","MEK1", "MEK2", "SUZ12", "ASTE1", "EGFR", "LRP1B", "MSH3", "PDCD1", "S1PR2", "EED", "EZH2"),
            drawRowBar = TRUE, drawColBar = TRUE,
            clinicalFeatures = c("tumorType", "sampleType","individualID"),
