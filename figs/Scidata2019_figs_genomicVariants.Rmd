@@ -116,7 +116,7 @@ color_list <- c(allcolors, morecolors1, morecolors2)
 require(maftools)
 
 # Make oncoplot for all samples for specific genes (top column bar shows mutational burden of the samples, row bar on the right shows frequency of mutations per gene)
-pdf("Scidata_fig_1_allsamples_oncoplot.pdf")#,height = 800, width = 1800 )
+pdf("Scidata_fig_1_allsamples_oncoplot.pdf", width=20,height=8)#,height = 800, width = 1800 )
 oncoplot(jhu_public_maf_all, genes = c("NF1","PIK3CA", "SUZ12", "EGFR", "ASTE1", "MEK1", "MEK2", "LRP1B", "MSH3", "PDCD1", "S1PR2", "EED", "EZH2"),
            drawRowBar = TRUE, drawColBar = TRUE,
            clinicalFeatures = c("individualID", "tumorType", "sampleType"),
@@ -126,6 +126,13 @@ oncoplot(jhu_public_maf_all, genes = c("NF1","PIK3CA", "SUZ12", "EGFR", "ASTE1",
            titleFontSize = 1.5, keepGeneOrder = TRUE, bgCol = "white", borderCol = "white")
 dev.off()
 
+oncoplot(jhu_public_maf_all, genes = c("NF1","PIK3CA", "SUZ12", "EGFR", "ASTE1", "MEK1", "MEK2", "LRP1B", "MSH3", "PDCD1", "S1PR2", "EED", "EZH2"),
+           drawRowBar = TRUE, drawColBar = TRUE,
+           clinicalFeatures = c("individualID", "tumorType", "sampleType"),
+           sortByAnnotation = TRUE, annotationColor = color_list, groupAnnotationBySize = FALSE, GeneOrderSort = TRUE,
+           removeNonMutated = FALSE, logColBar = FALSE,
+           SampleNamefont = 5,annotationFontSize = 1.8, fontSize = 1.0,legendFontSize = 1.8,
+           titleFontSize = 1.5, keepGeneOrder = TRUE, bgCol = "white", borderCol = "white")
 ```
 
 ## Figure 2
@@ -144,7 +151,7 @@ jhu_sample_2031 <- subsetMaf(jhu_public_maf_all, tsb = c(sample_2031$Tumor_Sampl
 
 # Make oncoplot to show the SNPs and mutation of the samples in various genes of interest
 print("Fig 1 : Sample 2-031")
-pdf("Sample_2-031.pdf")#, width=800, height = 800)
+pdf("Sample_2-031.pdf", width=20, height = 8)
 oncoplot(jhu_sample_2031, genes = c("NF1","PIK3CA", "PRC2","MEK1", "MEK2", "SUZ12", "ASTE1", "EGFR", "LRP1B", "MSH3", "PDCD1", "S1PR2", "EED", "EZH2"),
            drawRowBar = TRUE, drawColBar = TRUE,
            clinicalFeatures = c("tumorType", "sampleType","individualID"),
@@ -154,4 +161,11 @@ oncoplot(jhu_sample_2031, genes = c("NF1","PIK3CA", "PRC2","MEK1", "MEK2", "SUZ1
            titleFontSize = 1.0, keepGeneOrder = TRUE, GeneOrderSort = TRUE, bgCol = "white", borderCol = "white")
 dev.off()
 
+oncoplot(jhu_sample_2031, genes = c("NF1","PIK3CA", "PRC2","MEK1", "MEK2", "SUZ12", "ASTE1", "EGFR", "LRP1B", "MSH3", "PDCD1", "S1PR2", "EED", "EZH2"),
+           drawRowBar = TRUE, drawColBar = TRUE,
+           clinicalFeatures = c("tumorType", "sampleType","individualID"),
+           sortByAnnotation = TRUE, annotationColor = color_list, groupAnnotationBySize = FALSE, 
+           removeNonMutated = FALSE, logColBar = FALSE,
+           SampleNamefont = 5,annotationFontSize = 1.5, fontSize = 1,legendFontSize = 1.8,
+           titleFontSize = 1.0, keepGeneOrder = TRUE, GeneOrderSort = TRUE, bgCol = "white", borderCol = "white")
 ```
