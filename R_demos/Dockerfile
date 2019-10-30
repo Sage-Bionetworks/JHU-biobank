@@ -17,10 +17,10 @@ RUN R -e "install.packages('BiocManager')"
 RUN R -e "BiocManager::install(c('GSVA', 'GSEABase', 'org.Hs.eg.db', 'limma', 'GOsummaries', 'GSVAdata', 'biomaRt', 'maftools', 'Biostrings'))"
 
 ## install cran packages
-RUN R -e "install.packages(c('gProfileR', 'umap', 'dbscan', 'ggfortify', 'pheatmap', 'ggpubr', 'DT', 'here', 'reshape2', 'RColorBrewer'))"
+RUN R -e "install.packages(c('biomartr','gProfileR', 'umap', 'dbscan', 'ggfortify', 'pheatmap', 'ggpubr', 'DT', 'here', 'reshape2', 'RColorBrewer'))"
 
 RUN mkdir /home/rstudio/output
 
 COPY 0-setup.Rmd /home/rstudio/0-setup.Rmd 
 COPY 1-rnaseq-data-introduction.Rmd /home/rstudio/1-rnaseq-data-introduction.Rmd
-COPY 4-exomeseq-introduction.Rmd /home/rstudio/4-exomeseq-introduction.Rmd
+COPY 2-exomeseq-introduction.Rmd /home/rstudio/2-exomeseq-introduction.Rmd
