@@ -20,30 +20,12 @@ USER root
 
 #Install synapse
 RUN pip install synapseclient
-#RUN synapse login
 
 # Set the working directory to /data_dam
 WORKDIR /root/data_bam/
-# Copy the readme and datafiles into the container at /root/data_bam with instructions to put all data files here
-COPY bin/data/README.txt /root/data_bam/
 
-# Install package specific dependencies
-#RUN pip install --upgrade pip
-#RUN pip3 install wget 
-#RUN pip3 install gcc.x86_64 
-#RUN pip install bzip2
-#RUN pip install ncurses-devel
-#RUN pip install zlib-devel
-#RUN pip install bzip2-devel
-#RUN pip install xz-devel
-#RUN wget https://github.com/samtools/samtools/releases/download/1.9/samtools-1.9.tar.bz2
-#RUN tar -vxjf /root/data_bam/samtools-1.9.tar.bz2
-#WORKDIR /root/data_bam/samtools-1.9
-#COPY bin/samtools-1.9/* /root/data_bam/samtools-1.9/
-#RUN ./configure
-#RUN make
-#RUN make install
-#RUN export PATH=/root/data_bam:$PATH
+# Copy the readme into the container at /root/data_bam with instructions to run analysis
+COPY bin/data/README.txt /root/data_bam/
 
 # Make working directory for scripts
 WORKDIR /root/CNV_scripts
@@ -55,7 +37,6 @@ COPY bin/CNV_scripts/* /root/CNV_scripts/
 RUN chmod a+x /root/CNV_scripts/1_bed_to_interval_list.sh
 RUN chmod a+x /root/CNV_scripts/2_preprocess_intervals.sh
 RUN chmod a+x /root/CNV_scripts/3_collect_reads.sh
-#RUN chmod a+x /root/CNV_scripts/4_generate_PON.sh
 RUN chmod a+x /root/CNV_scripts/5_denoise_read_counts.sh
 RUN chmod a+x /root/CNV_scripts/6_plotdenoised_CR.sh
 RUN chmod a+x /root/CNV_scripts/7_collect_allelic_counts.sh
