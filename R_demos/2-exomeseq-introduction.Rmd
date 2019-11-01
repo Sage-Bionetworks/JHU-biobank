@@ -46,7 +46,6 @@ library(DT)
 library(maftools)
 library(here)
 library(ggfortify)
-library(stringr)
 library(reshape2)
 
 ## The login credentials have been stored in .synapseConfig file in the home dir. If you dont have this setup, please make the file before trying to login.
