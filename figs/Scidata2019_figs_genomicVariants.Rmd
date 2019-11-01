@@ -117,7 +117,7 @@ require(maftools)
 
 # Make oncoplot for all samples for specific genes (top column bar shows mutational burden of the samples, row bar on the right shows frequency of mutations per gene)
 pdf("Scidata_fig_1_allsamples_oncoplot.pdf", width=20,height=8)#,height = 800, width = 1800 )
-oncoplot(jhu_public_maf_all, genes = c("NF1","PIK3CA", "SUZ12", "EGFR", "ASTE1", "MEK1", "MEK2", "LRP1B", "MSH3", "PDCD1", "S1PR2", "EED", "EZH2"),
+oncoplot(jhu_public_maf_all, genes = c("NF1","TP53", "CDKN2A", "EED", "SUZ12", "EZH2", "CHD4", "EPC1", "ASTE1", "DAXX", "ATRX", "PCLO", "MTAP", "PREX2", "NCOA2", "BCL2L1", "TYK2", "BRAF", "EGFR", "LRP1B", "MSH3"),
            drawRowBar = TRUE, drawColBar = TRUE,
            clinicalFeatures = c("individualID", "tumorType", "sampleType"),
            sortByAnnotation = TRUE, annotationColor = color_list, groupAnnotationBySize = FALSE, GeneOrderSort = TRUE,
