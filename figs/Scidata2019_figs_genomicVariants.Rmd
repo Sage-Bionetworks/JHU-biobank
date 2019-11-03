@@ -46,7 +46,7 @@ The code below makes figures for the Scientific Data Paper showcasing the JHU Bi
 
 ```{r makingmaf files from SynTables, echo=FALSE, eval=TRUE, results='hide', message=FALSE, warning=FALSE}
 
-biobank_public_query <- "SELECT * FROM syn20554939 WHERE study = 'JHU NTAP Biobank' "
+biobank_public_query <- "SELECT * FROM syn20554939 WHERE study = 'JHU NTAP Biobank' AND FILTER <> 'common_variant' "
 jhu_biobank_table <- synTableQuery(biobank_public_query)$asDataFrame()
 
 #Make MAF from table dataframe
@@ -117,7 +117,7 @@ require(maftools)
 
 # Make oncoplot for all samples for specific genes (top column bar shows mutational burden of the samples, row bar on the right shows frequency of mutations per gene)
 pdf("Scidata_fig_1_allsamples_oncoplot.pdf", width=20,height=8)#,height = 800, width = 1800 )
-oncoplot(jhu_public_maf_all, genes = c("NF1","TP53", "CDKN2A", "EED", "SUZ12", "EZH2", "CHD4", "EPC1", "ASTE1", "DAXX", "ATRX", "PCLO", "MTAP", "PREX2", "NCOA2", "BCL2L1", "TYK2", "BRAF", "EGFR", "LRP1B", "MSH3"),
+oncoplot(jhu_public_maf_all, genes = c("NF1","TP53", "CDKN2A", "EED", "SUZ12", "EPC1", "ASTE1", "DAXX", "ATRX", "PCLO", "TYK2", "BRAF", "EGFR", "LRP1B", "MSH3"),
            drawRowBar = TRUE, drawColBar = TRUE,
            clinicalFeatures = c("individualID", "tumorType", "sampleType"),
            sortByAnnotation = TRUE, annotationColor = color_list, groupAnnotationBySize = FALSE, GeneOrderSort = TRUE,
@@ -126,7 +126,7 @@ oncoplot(jhu_public_maf_all, genes = c("NF1","TP53", "CDKN2A", "EED", "SUZ12", "
            titleFontSize = 1.5, keepGeneOrder = TRUE, bgCol = "white", borderCol = "white")
 dev.off()
 
-oncoplot(jhu_public_maf_all, genes = c("NF1","PIK3CA", "SUZ12", "EGFR", "ASTE1", "MEK1", "MEK2", "LRP1B", "MSH3", "PDCD1", "S1PR2", "EED", "EZH2"),
+oncoplot(jhu_public_maf_all, genes =c("NF1","TP53", "CDKN2A", "EED", "SUZ12", "EPC1", "ASTE1", "DAXX", "ATRX", "PCLO", "TYK2", "BRAF", "EGFR", "LRP1B", "MSH3"),
            drawRowBar = TRUE, drawColBar = TRUE,
            clinicalFeatures = c("individualID", "tumorType", "sampleType"),
            sortByAnnotation = TRUE, annotationColor = color_list, groupAnnotationBySize = FALSE, GeneOrderSort = TRUE,
