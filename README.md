@@ -64,7 +64,19 @@ The code to generate the omics figures in the manuscript can be found in the [fi
 
 ## CNV Figures
 
-We've also created a docker container to reproduce the copy number variant analysis and figures. This container can be obtained by running `docker pull nfosi/jhu_cnv_analysis:latest`.  
+We've also created a docker container to reproduce the copy number variant analysis and figures. 
+
+### CNV Analysis Docker Image (Local)
+
+The somatic copy number variation (CNV) analysis was done on WES files using a series of shell scripts generating plots of CNV as output. The series of shell scripts with the relevant reference files have been dockerized for reproducibility of the plots. The analysis can be reproduced by following the steps outlined below.
+
+1. Open a command line interface, such as Terminal.
+2. Do `docker pull nfosi/jhu_cnv_analysis:latest` to get the Docker image.
+3. Do `docker run -ti nfosi/jhu_cnv_analysis:latest bash` to start the container. 
+4. Follow the README.txt in the data_bam folder in the docker container to carry out the relevant analysis.
+5. Do `synapse -u "<username>" -p "<password>" get -r synid123` (as noted in the README.txt in the docker container to download the relevant reference files.
+
+*IMPORTANT NOTE* To save any results created during your Docker session, you'll need to mount a local directory to the Docker container when you run it. This will copy anything saved to the working directory to your local machine. Before step 3, do `mkdir data_bam` to create an input/output directory locally and store all the relevant .bam and .bam.bai files in there. Then run the command in step 3 with a `-v` flag e.g. `docker run -ti -v $PWD/data_bam:/root/data_bam/ nfosi/jhu_cnv_analysis:latest`.
 
 ## Demonstration notebook containers
 
@@ -93,17 +105,3 @@ If you like, you can also use these containers as a basis for creating your own 
 
 *IMPORTANT NOTE* To save any results created during your Docker session, you'll need to mount a local directory to the Docker container when you run it. This will copy anything saved to the working directory to your local machine. Before step 4, do `mkdir output` to create an output directory locally. Then run the command in step 4 with a `-v` flag e.g. `docker run -p 8888:8888 -v $PWD/output:/home/jovyan/work/output nfosi/jhu-biobank-py
 ` Alternatively, or in addition, you can save all of your results to Synapse using `synapseclient`.
-
-
-
-### CNV Analysis Docker Image (Local)
-
-The somatic copy number variation (CNV) analysis was done on WES files using a series of shell scripts generating plots of CNV as output. The series of shell scripts with the relevant reference files have been dockerized for reproducibility of the plots. The analysis can be reproduced by following the steps outlined below.
-
-1. Open a command line interface, such as Terminal.
-2. Do `docker pull nfosi/jhu_cnv_analysis:latest` to get the Docker image.
-3. Do `docker run -ti nfosi/jhu_cnv_analysis:latest bash` to start the container. 
-4. Follow the README.txt in the data_bam folder in the docker container to carry out the relevant analysis.
-5. Do `synapse -u "<username>" -p "<password>" get -r synid123` (as noted in the README.txt in the docker container to download the relevant reference files.
-
-*IMPORTANT NOTE* To save any results created during your Docker session, you'll need to mount a local directory to the Docker container when you run it. This will copy anything saved to the working directory to your local machine. Before step 3, do `mkdir data_bam` to create an input/output directory locally and store all the relevant .bam and .bam.bai files in there. Then run the command in step 3 with a `-v` flag e.g. `docker run -ti -v $PWD/data_bam:/root/data_bam/ nfosi/jhu_cnv_analysis:latest`.
