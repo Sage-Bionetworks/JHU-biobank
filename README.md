@@ -60,9 +60,13 @@ indexfile:
 
 ## RNA-seq and Exome-Seq figures
 
-The code to generate the omics figures in the manuscript can be found in the [figs](figs/) directory. Specifically the ExomeSeq markdown can be viewed [here]() and the RNASeq markdown can be viewed [here](). 
+The code to generate the omics figures in the manuscript can be found in the [figs](figs/) directory. Specifically the ExomeSeq markdown can be viewed [here]() and the RNASeq markdown can be viewed [here](). These notebooks are also contained in the R demo notebook container described below under the "Demonstration notebook containers" header.
 
-## Demonstration notebooks
+## CNV Figures
+
+We've also created a docker container to reproduce the copy number variant analysis and figures. This container can be obtained by running `docker pull nfosi/jhu_cnv_analysis:latest`.  
+
+## Demonstration notebook containers
 
 We've prepared Docker containers that contain all of the necessary dependencies to retrieve data from Synapse and perform some basic analyses of these data. The goal of this is to help you orient yourself to the data prior to the event in September.
 We've created containers for both R and Python users. You can find instructions on running these containers and following the data demos below.
