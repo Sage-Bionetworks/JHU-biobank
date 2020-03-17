@@ -1,0 +1,323 @@
+---
+title: "JHU Biobank: Exploratory analyses :: Sample 2009"
+author: Jineta Banerjee
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    fig_width: 10
+    fig_height: 10
+    fig_caption: true
+    df_print: paged 
+    #code_folding: true 
+#runtime: shiny_prerendered
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r lib_synapser, echo=FALSE, eval=TRUE, results='hide', message=FALSE, warning=FALSE, include=FALSE}
+
+library(synapser)
+library(synapserutils)
+
+library(BiocManager)
+library(gProfileR)
+library(GOsummaries)
+library(tidyverse)
+library(DT)
+library(vcfR)  ##read vcf files
+library(maftools)
+library(GenVisR)
+library(magicfor)  ## store data from forloop as dataframe
+library(magrittr)
+#library(shiny)
+library(glue)
+
+# library(reticulate)
+# use_python("/usr/local/bin/python3")
+# use_virtualenv("~/myenv")
+# use_condaenv("myenv")
+```
+
+```{r login_to_synapse, eval=TRUE, echo=FALSE, results='hide', message=FALSE, warning=FALSE, include=FALSE}
+
+## The login credentials have been stored in .synapseConfig file in the home dir. If you dont have this setup, please make the file before trying to login.
+synLogin()
+
+```
+
+# Abstract
+
+We processed the exomeSeq VCF files associated with the JHU-Biobank data to produce mutation annotation files (MAF) using Ensembl's VEP (Variant Effect Predictor) tool. MAF data from these files are stored in (**syn20546180**).
+
+### Sample information 
+
+* **Variant Data:** 2_009 had vcf files for Blood and Neurofibroma samples only. Refer to David Mohr's email: 2_009_MPNST_TD data was not released since it did not pass QC
+* **ExomeSeq Files:** 2_009 had bam files for Blood, NF, and MPNST samples 
+
+So the first half of this document shows the variant information associated with Blood and NF samples. The second half of the document shows copy ratio analysis at the chromosomal level for Blood, NF, and MPNST samples.
+
+* Genotype of Sample 2_009  => +/-  (Het)
+
+# Variant Analysis
+
+```{r data, cache=TRUE, echo= FALSE, eval=TRUE, fig.height=8,fig.width=4, results='hide', message=FALSE, warning=FALSE}
+
+data_2009 <- synTableQuery("SELECT * FROM syn20546180 WHERE individualID = '2-009'")$asDataFrame()
+
+# Clean up dataframe
+data_2009$sex[data_2009$sex == "male"] <- "Male"
+data_2009$sex[data_2009$sex == "female"] <- "Female"
+data_2009 <- data_2009[,-c(1:2)]
+
+data_2009_clin <- data_2009[, c(1,134:152)]
+data_2009_maf <- data_2009[, c(1:133)]
+
+
+#Make Maf files
+jhu_maf_file_normal_09 <- maftools::read.maf(maf = data_2009_maf %>% 
+                                               dplyr::filter(Tumor_Sample_Barcode == unique(data_2009_clin$Tumor_Sample_Barcode[data_2009_clin$specimenID == "2-009 Blood"])), 
+                                   verbose = FALSE, 
+                                   clinicalData = data_2009_clin %>% 
+                                     dplyr::filter(specimenID == "2-009 Blood"))
+
+jhu_maf_file_NF_09 <- maftools::read.maf(maf = data_2009_maf %>% 
+                                           dplyr::filter(Tumor_Sample_Barcode == unique(data_2009_clin$Tumor_Sample_Barcode[data_2009_clin$specimenID == "2-009 Neurofibroma"])), 
+                                   verbose = FALSE, 
+                                   clinicalData = data_2009_clin %>% 
+                                     dplyr::filter(specimenID == "2-009 Neurofibroma"))
+```
+
+
+```{r genotype, echo= FALSE, eval=FALSE, fig.height=8,fig.width=4, results='show', message=FALSE, warning=FALSE}
+
+#Genotype matrix
+print("Sample 2_009 Blood")
+genotypeMatrix(jhu_maf_file_normal_09, genes = "NF1")
+print("Sample 2_009 Neurofibroma")
+genotypeMatrix(jhu_maf_file_NF_09, genes = "NF1")
+
+```
+
+### Variants in genes of interest: 
+
+The _oncoplot_ below shows the types of variants found in genes of interest listed by the Pratilas lab. The Variant Classification is shown as a legend below the plot.
+
+```{r oncoplot, echo= FALSE, eval=TRUE, fig.height=10,fig.width=8, results='show', message=FALSE, warning=FALSE}
+
+print("Mutations in our genes of interest")
+maftools::coOncoplot(jhu_maf_file_normal_09, jhu_maf_file_NF_09, 
+           genes = c("NF1", "NF2", "GFAP", "CREBBP", "PIK3CA", "CDKN2A", "CDKN2B",
+                     "TP53", "PTEN", "SUZ12", "EED", "EZH2", "TSC1", "TSC2", "FLCN", 
+                     "EGFR", "ERBB4", "MET", "PDGFRA", "PDGFRB", "KDR", "FLT4", "FGFR1",
+                     "FGFR4", "AXL", "KIT", "NTRK1", "AURKA", "SRC", "NRAS", "KRAS", "BRAF",
+                     "RAF1", "ETV1", "MYC", "PIK3CA", "AKT2", "AKT3", "GNAS", "APC", "ATM",
+                     "CHEK2", "U2AF1", "SMARCA2", "MDM2", "CCND1", "CCND2", "CCND3", "CDK4", 
+                     "CDK6", "PTPN11"),
+           m1Name = "2_009 Blood", m2Name = "2_009 Neurofibroma",
+           colors = NULL, geneNamefont = 0.8,
+           showSampleNames = TRUE, SampleNamefont = 0.8, legendFontSize = 1.5,
+           titleFontSize = 1.5, keepGeneOrder = FALSE, bgCol = "#CCCCCC", borderCol = "white")
+
+```
+
+### Allele frequency
+
+The allele frequency of the specific variants according to [**gnomAD**](https://gnomad.broadinstitute.org/about) can be found below:
+```{r, echo=FALSE}
+
+table_results <- data_2009_maf %>%  
+  dplyr::filter(Hugo_Symbol %in% c("NF1", "NF2", "GFAP", "CREBBP", "PIK3CA", "CDKN2A", "CDKN2B",
+                     "TP53", "PTEN", "SUZ12", "EED", "EZH2", "TSC1", "TSC2", "FLCN", 
+                     "EGFR", "ERBB4", "MET", "PDGFRA", "PDGFRB", "KDR", "FLT4", "FGFR1",
+                     "FGFR4", "AXL", "KIT", "NTRK1", "AURKA", "SRC", "NRAS", "KRAS", "BRAF",
+                     "RAF1", "ETV1", "MYC", "PIK3CA", "AKT2", "AKT3", "GNAS", "APC", "ATM",
+                     "CHEK2", "U2AF1", "SMARCA2", "MDM2", "CCND1", "CCND2", "CCND3", "CDK4", 
+                     "CDK6", "PTPN11")) %>% 
+  dplyr::select(c("Hugo_Symbol", "Chromosome", "gnomAD_AF", "Variant_Classification", "HGVSc", "HGVSp"))
+
+DT::datatable(table_results)
+```
+
+
+### Putative variant location :
+
+The series of _lollipopPlots_ below show the putative location and amino-acid information associated with the variants in the above genes of interest. 
+
+The top _lollipop_ refers to the variant in the normal Blood sample, the bottom one refers to the one in the NF sample. The gene name and the selected transcript ID (beginning with "NM_") is located in the right hand top corner of each plot. In case more than one transcripts are found for a gene, the longest transcript is used for the visualization (the one selected is highlighted in the right hand top corner).
+
+_A small caveat in these plots is that when a protein has two overlapping domains, the labels overlap as well. In the interest of readability, the font size was reduced a bit, but some overlaps were unavoidable. Currently exploring other visualization tools to tackle this caveat._
+
+```{r, context="render", echo= FALSE, eval=FALSE, fig.height=8,fig.width=8, results='show', message=FALSE, warning=FALSE}
+
+shiny::selectizeInput('selected_gene', 
+                      label = "Genes", 
+                      choices = c("NF1", "NF2", "GFAP", "CREBBP", "PIK3CA", "CDKN2A", "CDKN2B",
+                     "TP53", "PTEN", "SUZ12", "EED", "EZH2", "TSC1", "TSC2", "FLCN", 
+                     "EGFR", "ERBB4", "MET", "PDGFRA", "PDGFRB", "KDR", "FLT4", "FGFR1",
+                     "FGFR4", "AXL", "KIT", "NTRK1", "AURKA", "SRC", "NRAS", "KRAS", "BRAF",
+                     "RAF1", "ETV1", "MYC", "PIK3CA", "AKT2", "AKT3", "GNAS", "APC", "ATM",
+                     "CHEK2", "U2AF1", "SMARCA2", "MDM2", "CCND1", "CCND2", "CCND3", "CDK4", 
+                     "CDK6", "PTPN11"),
+                     #c(unique(data_2009$Hugo_Symbol)),
+                      selected = "NF1", 
+                      multiple = F)
+shiny::plotOutput("lolliPlot")
+```
+
+```{r, context="server", echo= FALSE, eval=FALSE, fig.height=8,fig.width=8, results='show', message=FALSE, warning=FALSE}
+
+output$lolliPlot <- shiny::renderPlot({
+  maftools::lollipopPlot2(
+      m1 = jhu_maf_file_normal_09,
+      m2 = jhu_maf_file_NF_09,
+      gene = input$selected_gene,
+      m1_name = "Normal 2_009", 
+      m2_name = "NF 2_009",
+      m1_label = "all",
+      m2_label = "all",
+      labPosSize = 1.5,
+      legendTxtSize = 1.5,
+      labPosAngle = 0,
+      domainLabelSize = 1.8,
+      axisTextSize = c(1, 1),
+      pointSize = 2.5)
+})
+
+```
+
+```{r allplots, echo= FALSE, eval=TRUE, fig.height=8, fig.width=10, results='show', message=FALSE, warning=FALSE}
+
+genes <- c("NF1", "TP53", "EZH2","EGFR", "PDGFRA", "CCND3", "KDR", "FLT4", "FGFR4", "AXL", "AURKA", "APC", "ATM", "SMARCA2")
+
+for (i in genes){
+print(glue('Gene: {i}'))
+maftools::lollipopPlot2(
+      m1 = jhu_maf_file_normal_09,
+      m2 = jhu_maf_file_NF_09,
+      gene = i,
+      m1_name = "Normal 2_009", 
+      m2_name = "NF 2_009",
+      m1_label = "all",
+      m2_label = "all",
+      labPosSize = 1.5,
+      legendTxtSize = 1.5,
+      labPosAngle = 45,
+      domainLabelSize = 1.0,
+      axisTextSize = c(1, 1),
+      pointSize = 2.5)
+}
+
+```
+
+
+# Copy Ratio Analysis
+
+
+```{r cnv, echo=FALSE, eval=TRUE, out.width = "90%", fig.pos="h"}
+
+knitr::include_graphics('/Users/jineta/git/gitrepo/JHU-biobank/figs/Sample_2009_CNV_GATK_withmag.png',
+  auto_pdf = getOption("knitr.graphics.auto_pdf", FALSE),
+  dpi = NULL)
+
+## NOTE: include_graphics only works with pngs not pdfs!
+
+#![Fig](/Users/jineta/git/gitrepo/JHU-biobank/figs/Sample_2009_CNV_GATK_withmag.pdf)
+
+```
+
+Currently our copy ratio analysis captures information at the gross chromosomal level and not gene level. From the above plot few observations emerge:
+
+* The MPNST sample data is extremely noisy. Refering back to **David Mohr's email**, they did not release VCF data for this sample since it did not pass their QC. This plot echoes a similar observation where the bam file that was released (probably by mistake) captures extremely noisy data. **Great caution** should be taken while making any conclusions regarding this sample from the above plot.
+
+* The plots for Blood and Neurofibroma samples look fairly similar with the exception of possible changes in copy ratio in Chr 9, 10, and 11.
+
+```{r topvar, echo= FALSE, eval=FALSE, fig.height=8,fig.width=8, results='show', message=FALSE, warning=FALSE}
+
+jhu_normal_09_gene_changes <- getGeneSummary(jhu_maf_file_normal_09)  # the resulting df is sorted by total number of mutations
+jhu_pNF_09_gene_changes <- getGeneSummary(jhu_maf_file_NF_09)
+
+jhu_gene_changes_indiv <- jhu_pNF_09_gene_changes$Hugo_Symbol[!(jhu_pNF_09_gene_changes$Hugo_Symbol %in% jhu_normal_09_gene_changes$Hugo_Symbol)]
+
+print("Mutations in top genes")
+coOncoplot(jhu_maf_file_normal_09, jhu_maf_file_NF_09, genes = c(jhu_gene_changes_indiv[1:40]),
+           m1Name = "Normal 2_009", m2Name = "NF 2_009",
+           colors = NULL, geneNamefont = 0.8,
+           showSampleNames = TRUE, SampleNamefont = 0.8, legendFontSize = 1.2,
+           titleFontSize = 1.5, keepGeneOrder = FALSE, bgCol = "#CCCCCC", borderCol = "white")
+
+print("Summary of the normal samples")
+plotmafSummary(maf = jhu_maf_file_normal_09, rmOutlier = TRUE, addStat = 'median', dashboard = TRUE, titvRaw = TRUE, top = 20, log_scale = FALSE)
+print("Summary of the paired pNF samples")
+plotmafSummary(maf = jhu_maf_file_NF_09, rmOutlier = TRUE, addStat = 'median', dashboard = TRUE, titvRaw = TRUE, top = 20)
+
+```
+
+```{r genotype_nf, echo= FALSE, eval=FALSE, fig.height=4,fig.width=4, results='show', message=FALSE, warning=FALSE}
+
+#Select specific files
+jhu_NF_all <- subset(jhu_anno_select, assay == "exomeSeq" & 
+                      tumorType == "Neurofibroma" & 
+                      tumorType != "Plexiform" )
+
+jhu_normal_NF <- subset(jhu_anno_select, assay == "exomeSeq" & 
+                              is.na(jhu_anno_select$tumorType) == TRUE & 
+                              is.na(jhu_anno_select$specimenID) == FALSE &
+                              organ == "blood" &
+                              individualID %in% jhu_NF_all$individualID)
+
+#Make Maf file
+jhu_maf_file_normal_NF <- merge_mafs(c(jhu_normal_NF$filepath), verbose = TRUE, clinicalData = jhu_normal_NF)
+jhu_maf_file_NF_all <- merge_mafs(c(jhu_NF_all$filepath), verbose = TRUE, clinicalData = jhu_NF_all)
+
+#Genotype matrix
+# print("Sample#2_009N NF1 genotype")
+# genotypeMatrix(jhu_maf_file_normal_NF, genes = "NF1")
+# print("Sample#2_009NF NF1 genotype")
+# genotypeMatrix(jhu_maf_file_NF_all, genes = "NF1")
+
+print("Mutations in our genes of interest")
+coOncoplot(jhu_maf_file_normal_NF, jhu_maf_file_NF_all, genes = c("NF1", "NF2", "GFAP", "CREBBP", "PIK3CA"),
+           m1Name = "Normal Samples", m2Name = "NF Samples",
+           clinicalFeatures1 = "individualID", clinicalFeatures2 = "individualID", removeNonMutated = FALSE,
+           sortByAnnotation1 = TRUE, sortByAnnotation2 = TRUE,
+           colors = NULL, geneNamefont = 0.8,
+           showSampleNames = TRUE, SampleNamefont = 0.8, legendFontSize = 1.2,
+           titleFontSize = 1.5, keepGeneOrder = FALSE, bgCol = "#CCCCCC", borderCol = "white")
+
+print("Mutations in NF1 gene between normal and NF tissue sample from 2_009")
+lollipopPlot2(m1 = jhu_maf_file_normal_NF, m2 = jhu_maf_file_NF_all, 
+              gene = "NF1", 
+              m1_name = "Normal 2_009", m2_name = "NF 2_009", 
+              clinicalFeatures1 = "individualID", clinicalFeatures2 = "individualID", removeNonMutated = FALSE,
+              sortByAnnotation1 = TRUE, sortByAnnotation2 = TRUE,
+              labPosAngle = 0, labPosSize = 0.9, axisTextSize = c(1, 1),
+              pointSize = 1.2, domainLabelSize = 0.5, legendTxtSize = 0.8)
+
+jhu_normal_09_gene_changes <- getGeneSummary(jhu_maf_file_normal_NF)  # the resulting df is sorted by total number of mutations
+jhu_pNF_09_gene_changes <- getGeneSummary(jhu_maf_file_NF_all)
+
+jhu_gene_changes_indiv <- jhu_pNF_09_gene_changes$Hugo_Symbol[!(jhu_pNF_09_gene_changes$Hugo_Symbol %in% jhu_normal_09_gene_changes$Hugo_Symbol)]
+
+print("Mutations in top genes")
+coOncoplot(jhu_maf_file_normal_NF, jhu_maf_file_NF_all, genes = c(jhu_gene_changes_indiv[1:40]),
+           m1Name = "Normal 2_009", m2Name = "NF 2_009",
+           clinicalFeatures1 = "individualID", clinicalFeatures2 = "individualID", removeNonMutated = FALSE,
+           sortByAnnotation1 = TRUE, sortByAnnotation2 = TRUE,
+           colors = NULL, geneNamefont = 0.8,
+           showSampleNames = TRUE, SampleNamefont = 0.8, legendFontSize = 1.2,
+           titleFontSize = 1.5, keepGeneOrder = FALSE, bgCol = "#CCCCCC", borderCol = "white")
+
+print("Summary of the normal samples")
+plotmafSummary(maf = jhu_maf_file_normal_NF, rmOutlier = TRUE, addStat = 'median', dashboard = TRUE, titvRaw = TRUE, top = 20, log_scale = FALSE)
+print("Summary of the paired pNF samples")
+plotmafSummary(maf = jhu_maf_file_NF_09, rmOutlier = TRUE, addStat = 'median', dashboard = TRUE, titvRaw = TRUE, top = 20)
+
+```
+
