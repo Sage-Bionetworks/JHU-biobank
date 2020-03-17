@@ -47,7 +47,10 @@ The code below makes figures for the Scientific Data Paper showcasing the JHU Bi
 ```{r makingmaf files from SynTables, echo=FALSE, eval=TRUE, results='hide', message=FALSE, warning=FALSE}
 
 biobank_public_query <- "SELECT * FROM syn20554939 WHERE study = 'JHU NTAP Biobank' AND FILTER <> 'common_variant' "
+#biobank_public_query <- "SELECT * FROM syn20554939 WHERE study = 'JHU NTAP Biobank' "
 jhu_biobank_table <- synTableQuery(biobank_public_query)$asDataFrame()
+jhu_biobank_table <- jhu_biobank_table %>% 
+  dplyr::filter(!specimenID %in% c("2-004 pNF Cell Line", "2-004 NF Cell Line"))
 
 #Make MAF from table dataframe
 jhu_public_maf <- jhu_biobank_table[, c(3:135)]
@@ -116,13 +119,17 @@ color_list <- c(allcolors, morecolors1, morecolors2)
 require(maftools)
 
 # Make oncoplot for all samples for specific genes (top column bar shows mutational burden of the samples, row bar on the right shows frequency of mutations per gene)
-pdf("Scidata_fig_1_allsamples_oncoplot.pdf", width=20,height=8)#,height = 800, width = 1800 )
-oncoplot(jhu_public_maf_all, genes = c("NF1","TP53", "CDKN2A", "EED", "SUZ12", "EPC1", "ASTE1", "DAXX", "ATRX", "PCLO", "TYK2", "BRAF", "EGFR", "LRP1B", "MSH3"),
+pdf("Scidata_fig_3_allsamples_oncoplot_03172020_nocommonvar.pdf", width=20,height=8)#,height = 800, width = 1800 )
+oncoplot(jhu_public_maf_all, 
+         genes = c("NF1","TP53", "CDKN2A", "EED", "SUZ12", 
+                   "EZH2", "CHD4", "EPC1", "ASTE1", "DAXX", "ATRX", "PCLO", 
+                  "MTAP", "PREX2", "NCOA2", "BCL2L1", "TYK2", "BRAF", "EGFR", "LRP1B", "MSH3"),
            drawRowBar = TRUE, drawColBar = TRUE,
            clinicalFeatures = c("individualID", "tumorType", "sampleType"),
            sortByAnnotation = TRUE, annotationColor = color_list, groupAnnotationBySize = FALSE, GeneOrderSort = TRUE,
            removeNonMutated = FALSE, logColBar = FALSE,
            SampleNamefont = 5,annotationFontSize = 1.8, fontSize = 1.0,legendFontSize = 1.8,
+           sepwd_genes = 1.5, sepwd_samples = 2.5,
            titleFontSize = 1.5, keepGeneOrder = TRUE, bgCol = "white", borderCol = "white")
 dev.off()
 
